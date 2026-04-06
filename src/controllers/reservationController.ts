@@ -44,8 +44,8 @@ export async function createReservation(
     if (!timeStart || !TIME_REGEX.test(timeStart)) {
       errors.push('timeStart is required (HH:MM)');
     }
-    if (!timeEnd || !TIME_REGEX.test(timeEnd)) {
-      errors.push('timeEnd is required (HH:MM)');
+    if (timeEnd !== undefined && !TIME_REGEX.test(timeEnd)) {
+      errors.push('timeEnd must be HH:MM');
     }
     if (!clientName || typeof clientName !== 'string' || clientName.trim() === '') {
       errors.push('clientName is required');

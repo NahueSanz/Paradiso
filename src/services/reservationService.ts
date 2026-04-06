@@ -12,6 +12,12 @@ function parseTime(timeStr: string): Date {
   return new Date(`1970-01-01T${timeStr}:00.000Z`);
 }
 
+const DEFAULT_DURATION_MINUTES = 90;
+
+function addMinutes(date: Date, minutes: number): Date {
+  return new Date(date.getTime() + minutes * 60 * 1000);
+}
+
 async function assertNoOverlap(
   courtId: number,
   date: Date,
@@ -61,7 +67,7 @@ export interface CreateReservationInput {
   courtId: number;
   date: string;
   timeStart: string;
-  timeEnd: string;
+  timeEnd?: string;
   clientName: string;
   clientPhone?: string;
   depositAmount?: number;
@@ -72,7 +78,7 @@ export async function createReservation(input: CreateReservationInput) {
 
   const parsedDate = parseDate(date);
   const parsedStart = parseTime(timeStart);
-  const parsedEnd = parseTime(timeEnd);
+  const parsedEnd = timeEnd ? parseTime(timeEnd) : addMinutes(parsedStart, DEFAULT_DURATION_MINUTES);
 
   if (parsedEnd <= parsedStart) {
     throw new AppError('timeEnd must be after timeStart', 400);
