@@ -1,4 +1,4 @@
-import type { Court, Reservation, ReservationStatus } from './types';
+import type { Court, PaymentStatus, PlayStatus, Reservation } from './types';
 
 const BASE = '/api';
 
@@ -31,7 +31,8 @@ export interface CreateReservationPayload {
   timeStart: string;
   timeEnd: string;
   clientName: string;
-  clientPhone?: string;
+  type?: string;
+  totalPrice?: number;
   depositAmount?: number;
 }
 
@@ -40,13 +41,12 @@ export function createReservation(data: CreateReservationPayload): Promise<Reser
 }
 
 export interface UpdateReservationPayload {
-  date?: string;
-  timeStart?: string;
-  timeEnd?: string;
   clientName?: string;
-  clientPhone?: string | null;
+  type?: string | null;
+  totalPrice?: number | null;
   depositAmount?: number | null;
-  status?: ReservationStatus;
+  paymentStatus?: PaymentStatus;
+  playStatus?: PlayStatus;
 }
 
 export function updateReservation(id: number, data: UpdateReservationPayload): Promise<Reservation> {

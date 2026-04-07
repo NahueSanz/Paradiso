@@ -1,4 +1,5 @@
-export type ReservationStatus = 'pending' | 'confirmed' | 'cancelled';
+export type PaymentStatus = 'pending' | 'partial' | 'paid';
+export type PlayStatus    = 'scheduled' | 'playing' | 'finished';
 
 export interface Court {
   id: number;
@@ -9,13 +10,16 @@ export interface Court {
 export interface Reservation {
   id: number;
   courtId: number;
-  date: string;       // ISO string — date part
-  timeStart: string;  // ISO string — time anchored to 1970-01-01
-  timeEnd: string;    // ISO string — time anchored to 1970-01-01
+  date: string;        // YYYY-MM-DD
+  timeStart: string;   // ISO anchored to 1970-01-01
+  timeEnd: string;     // ISO anchored to 1970-01-01
   clientName: string;
   clientPhone: string | null;
-  status: ReservationStatus;
+  type: string | null;
+  totalPrice: string | null;
   depositAmount: string | null;
+  paymentStatus: PaymentStatus;
+  playStatus: PlayStatus;
   court: { id: number; name: string };
 }
 

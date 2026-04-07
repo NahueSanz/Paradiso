@@ -1,160 +1,166 @@
 import { useEffect, useRef, useState } from 'react';
-import type { Reservation, ReservationStatus, TimeSlot } from '../types';
+import type { Reservation, TimeSlot } from '../types';
+
+// ── public types ──────────────────────────────────────────────────────────────
 
 export interface ModalState {
   courtId: number;
+  courtName: string;
   date: string;
   slot: TimeSlot;
   reservation?: Reservation;
 }
 
+export interface FormData {
+  clientName: string;
+  type: string;
+  totalPrice: string;
+  depositAmount: string;
+}
+
 interface Props {
   state: ModalState;
   onClose: () => void;
-  onSave: (data: FormData) => Promise<void>;
+  onSave: (form: FormData) => Promise<void>;
+  onMarkPaid: (id: number) => Promise<void>;
+  onMarkPlaying: (id: number) => Promise<void>;
   onDelete: (id: number) => Promise<void>;
 }
 
-export interface FormData {
-  courtId: number;
-  date: string;
-  timeStart: string;
-  timeEnd: string;
-  clientName: string;
-  clientPhone: string;
-  depositAmount: string;
-  status?: ReservationStatus;
-}
+// ── constants ─────────────────────────────────────────────────────────────────
 
-// "HH:MM" → "HH:MM" (pass-through); used to build default end from slot
-function nextHour(slot: TimeSlot): string {
-  const h = parseInt(slot.slice(0, 2), 10);
-  return `${String(h + 1).padStart(2, '0')}:00`;
-}
+const RESERVATION_TYPES = ['Match', 'Training', 'Class', 'Tournament', 'Other'];
 
-function isoToHHMM(iso: string): string {
-  return iso.slice(11, 16);
-}
+// ── component ─────────────────────────────────────────────────────────────────
 
-const STATUSES: ReservationStatus[] = ['pending', 'confirmed', 'cancelled'];
-
-export default function ReservationModal({ state, onClose, onSave, onDelete }: Props) {
-  const { reservation, courtId, date, slot } = state;
+export default function ReservationModal({
+  state,
+  onClose,
+  onSave,
+  onMarkPaid,
+  onMarkPlaying,
+  onDelete,
+}: Props) {
+  const { reservation, courtName, date, slot } = state;
   const isEdit = !!reservation;
 
-  const [timeStart, setTimeStart] = useState(
-    reservation ? isoToHHMM(reservation.timeStart) : slot,
-  );
-  const [timeEnd, setTimeEnd] = useState(
-    reservation ? isoToHHMM(reservation.timeEnd) : nextHour(slot),
-  );
-  const [clientName, setClientName] = useState(reservation?.clientName ?? '');
-  const [clientPhone, setClientPhone] = useState(reservation?.clientPhone ?? '');
+  const [clientName,    setClientName]    = useState(reservation?.clientName ?? '');
+  const [type,          setType]          = useState(reservation?.type ?? '');
+  const [totalPrice,    setTotalPrice]    = useState(reservation?.totalPrice ?? '');
   const [depositAmount, setDepositAmount] = useState(reservation?.depositAmount ?? '');
-  const [status, setStatus] = useState<ReservationStatus>(reservation?.status ?? 'pending');
-  const [error, setError] = useState('');
-  const [saving, setSaving] = useState(false);
+  const [error,         setError]         = useState('');
+  const [busy,          setBusy]          = useState(false);
 
   const nameRef = useRef<HTMLInputElement>(null);
   useEffect(() => { nameRef.current?.focus(); }, []);
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  // Close on backdrop click
+  function handleBackdrop(e: React.MouseEvent<HTMLDivElement>) {
+    if (e.target === e.currentTarget) onClose();
+  }
+
+  async function run(fn: () => Promise<void>) {
     setError('');
-    setSaving(true);
+    setBusy(true);
     try {
-      await onSave({
-        courtId,
-        date,
-        timeStart,
-        timeEnd,
-        clientName,
-        clientPhone,
-        depositAmount: depositAmount.toString(),
-        ...(isEdit ? { status } : {}),
-      });
+      await fn();
       onClose();
     } catch (err) {
       setError((err as Error).message);
     } finally {
-      setSaving(false);
+      setBusy(false);
     }
   }
 
-  async function handleDelete() {
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    run(() => onSave({ clientName, type, totalPrice, depositAmount }));
+  }
+
+  function handleDelete() {
     if (!reservation) return;
     if (!confirm('Delete this reservation?')) return;
-    setSaving(true);
-    try {
-      await onDelete(reservation.id);
-      onClose();
-    } catch (err) {
-      setError((err as Error).message);
-    } finally {
-      setSaving(false);
-    }
+    run(() => onDelete(reservation.id));
   }
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md mx-4 p-6">
-        <h2 className="text-lg font-semibold mb-4">
-          {isEdit ? 'Edit Reservation' : 'New Reservation'}
-        </h2>
+  const isPaid    = reservation?.paymentStatus === 'paid';
+  const isPlaying = reservation?.playStatus    === 'playing';
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Time row */}
-          <div className="flex gap-3">
-            <label className="flex-1">
-              <span className="block text-xs text-gray-500 mb-1">Start</span>
-              <input
-                type="time"
-                value={timeStart}
-                onChange={(e) => setTimeStart(e.target.value)}
-                className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
-                required
-              />
-            </label>
-            <label className="flex-1">
-              <span className="block text-xs text-gray-500 mb-1">End</span>
-              <input
-                type="time"
-                value={timeEnd}
-                onChange={(e) => setTimeEnd(e.target.value)}
-                className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
-                required
-              />
-            </label>
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
+      onMouseDown={handleBackdrop}
+    >
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md mx-4">
+
+        {/* ── header ── */}
+        <div className="flex items-start justify-between px-6 pt-6 pb-4 border-b">
+          <div>
+            <h2 className="text-base font-semibold text-gray-900">
+              {isEdit ? 'Edit Reservation' : 'New Reservation'}
+            </h2>
+            <p className="text-xs text-gray-400 mt-0.5">
+              {courtName} &middot; {date} &middot; {slot}
+            </p>
           </div>
+          <button
+            onClick={onClose}
+            className="text-gray-300 hover:text-gray-500 text-2xl leading-none -mt-1 -mr-1"
+          >
+            &times;
+          </button>
+        </div>
+
+        {/* ── form ── */}
+        <form id="reservation-form" onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
 
           {/* Client name */}
-          <label className="block">
-            <span className="block text-xs text-gray-500 mb-1">Client name</span>
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1">
+              Client name <span className="text-red-400">*</span>
+            </label>
             <input
               ref={nameRef}
               type="text"
               value={clientName}
               onChange={(e) => setClientName(e.target.value)}
-              placeholder="John Doe"
-              className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+              placeholder="Jane Doe"
               required
+              className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
             />
-          </label>
+          </div>
 
-          {/* Phone + deposit */}
+          {/* Type */}
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1">Type</label>
+            <select
+              value={type}
+              onChange={(e) => setType(e.target.value)}
+              className="w-full border rounded-lg px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+            >
+              <option value="">Select type…</option>
+              {RESERVATION_TYPES.map((t) => (
+                <option key={t} value={t.toLowerCase()}>{t}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Total price + Deposit */}
           <div className="flex gap-3">
-            <label className="flex-1">
-              <span className="block text-xs text-gray-500 mb-1">Phone</span>
+            <div className="flex-1">
+              <label className="block text-xs font-medium text-gray-500 mb-1">Total price (€)</label>
               <input
-                type="tel"
-                value={clientPhone}
-                onChange={(e) => setClientPhone(e.target.value)}
-                placeholder="+34 600 000 000"
+                type="number"
+                min="0"
+                step="0.01"
+                value={totalPrice}
+                onChange={(e) => setTotalPrice(e.target.value)}
+                placeholder="0.00"
                 className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
               />
-            </label>
-            <label className="flex-1">
-              <span className="block text-xs text-gray-500 mb-1">Deposit (€)</span>
+            </div>
+            <div className="flex-1">
+              <label className="block text-xs font-medium text-gray-500 mb-1">Deposit (€)</label>
               <input
                 type="number"
                 min="0"
@@ -164,61 +170,70 @@ export default function ReservationModal({ state, onClose, onSave, onDelete }: P
                 placeholder="0.00"
                 className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
               />
-            </label>
+            </div>
           </div>
 
-          {/* Status (edit only) */}
-          {isEdit && (
-            <label className="block">
-              <span className="block text-xs text-gray-500 mb-1">Status</span>
-              <select
-                value={status}
-                onChange={(e) => setStatus(e.target.value as ReservationStatus)}
-                className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
-              >
-                {STATUSES.map((s) => (
-                  <option key={s} value={s}>
-                    {s.charAt(0).toUpperCase() + s.slice(1)}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
-
+          {/* Error */}
           {error && (
             <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
               {error}
             </p>
           )}
 
-          {/* Actions */}
-          <div className="flex items-center gap-2 pt-1">
-            {isEdit && (
+          {/* ── quick-action buttons (edit only) ── */}
+          {isEdit && (
+            <div className="flex gap-2 pt-1">
               <button
                 type="button"
-                onClick={handleDelete}
-                disabled={saving}
-                className="text-sm text-red-500 hover:text-red-700 mr-auto"
+                disabled={busy || isPaid}
+                onClick={() => run(() => onMarkPaid(reservation!.id))}
+                className="flex-1 py-2 text-sm font-medium rounded-lg border border-red-200 text-red-600 hover:bg-red-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
               >
-                Delete
+                {isPaid ? 'Paid ✓' : 'Mark as Paid'}
               </button>
-            )}
+              <button
+                type="button"
+                disabled={busy || isPlaying}
+                onClick={() => run(() => onMarkPlaying(reservation!.id))}
+                className="flex-1 py-2 text-sm font-medium rounded-lg border border-blue-200 text-blue-600 hover:bg-blue-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                {isPlaying ? 'Playing ✓' : 'Mark as Playing'}
+              </button>
+            </div>
+          )}
+        </form>
+
+        {/* ── footer ── */}
+        <div className="flex items-center gap-2 px-6 pb-5">
+          {isEdit && (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={handleDelete}
+              className="text-xs text-gray-400 hover:text-red-500 transition-colors"
+            >
+              Delete
+            </button>
+          )}
+          <div className="flex gap-2 ml-auto">
             <button
               type="button"
               onClick={onClose}
-              className="ml-auto px-4 py-2 text-sm text-gray-600 hover:text-gray-900"
+              className="px-4 py-2 text-sm text-gray-500 hover:text-gray-800 transition-colors"
             >
               Cancel
             </button>
             <button
+              form="reservation-form"
               type="submit"
-              disabled={saving}
-              className="px-4 py-2 text-sm font-medium bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
+              disabled={busy}
+              className="px-5 py-2 text-sm font-medium bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors"
             >
-              {saving ? 'Saving…' : isEdit ? 'Update' : 'Create'}
+              {busy ? 'Saving…' : isEdit ? 'Update' : 'Create'}
             </button>
           </div>
-        </form>
+        </div>
+
       </div>
     </div>
   );

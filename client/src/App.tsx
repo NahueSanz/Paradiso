@@ -1,80 +1,80 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import * as api from './api';
-import ReservationGrid from './components/ReservationGrid';
+import ScheduleGrid from './components/ScheduleGrid';
 import ReservationModal, { type FormData, type ModalState } from './components/ReservationModal';
 import type { Court, Reservation, TimeSlot } from './types';
-
-// Time slots: 08:00 → 21:00 (each row is 1 hour)
-const SLOTS: TimeSlot[] = Array.from({ length: 14 }, (_, i) =>
-  `${String(i + 8).padStart(2, '0')}:00`,
-);
 
 function todayISO(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-export default function App() {
-  const [date, setDate] = useState(todayISO());
-  const [courts, setCourts] = useState<Court[]>([]);
-  const [reservations, setReservations] = useState<Reservation[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [modal, setModal] = useState<ModalState | null>(null);
+function nextHour(slot: TimeSlot): string {
+  const h = parseInt(slot.slice(0, 2), 10);
+  return `${String(h + 1).padStart(2, '0')}:00`;
+}
 
-  // Load courts once
+export default function App() {
+  const [date, setDate]             = useState(todayISO());
+  const [courts, setCourts]         = useState<Court[]>([]);
+  const [courtError, setCourtError] = useState('');
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [modal, setModal]           = useState<ModalState | null>(null);
+
   useEffect(() => {
-    api.getCourts().then(setCourts).catch(() => setError('Failed to load courts'));
+    api.getCourts().then(setCourts).catch(() => setCourtError('Failed to load courts.'));
   }, []);
 
-  // Load reservations when date changes
-  const loadReservations = useCallback(async () => {
-    setLoading(true);
-    setError('');
-    try {
-      const data = await api.getReservations(date);
-      setReservations(data);
-    } catch {
-      setError('Failed to load reservations');
-    } finally {
-      setLoading(false);
-    }
-  }, [date]);
-
-  useEffect(() => { loadReservations(); }, [loadReservations]);
+  function refresh() { setRefreshKey((k) => k + 1); }
 
   function openModal(courtId: number, slot: TimeSlot, reservation?: Reservation) {
-    setModal({ courtId, date, slot, reservation });
+    const courtName = courts.find((c) => c.id === courtId)?.name ?? '';
+    setModal({ courtId, courtName, date, slot, reservation });
   }
 
   async function handleSave(form: FormData) {
-    const payload = {
-      courtId: form.courtId,
-      date: form.date,
-      timeStart: form.timeStart,
-      timeEnd: form.timeEnd,
+    const base = {
       clientName: form.clientName,
-      ...(form.clientPhone ? { clientPhone: form.clientPhone } : {}),
+      ...(form.type         ? { type: form.type }                          : {}),
+      ...(form.totalPrice   ? { totalPrice: parseFloat(form.totalPrice) }  : {}),
       ...(form.depositAmount ? { depositAmount: parseFloat(form.depositAmount) } : {}),
     };
 
     if (modal?.reservation) {
-      await api.updateReservation(modal.reservation.id, { ...payload, status: form.status });
+      await api.updateReservation(modal.reservation.id, base);
     } else {
-      await api.createReservation(payload);
+      await api.createReservation({
+        courtId:   modal!.courtId,
+        date:      modal!.date,
+        timeStart: modal!.slot,
+        timeEnd:   nextHour(modal!.slot),
+        ...base,
+      });
     }
-    await loadReservations();
+    refresh();
+  }
+
+  async function handleMarkPaid(id: number) {
+    await api.updateReservation(id, { paymentStatus: 'paid' });
+    refresh();
+  }
+
+  async function handleMarkPlaying(id: number) {
+    await api.updateReservation(id, { playStatus: 'playing' });
+    refresh();
   }
 
   async function handleDelete(id: number) {
     await api.deleteReservation(id);
-    await loadReservations();
+    refresh();
   }
 
   const legend = [
     { label: 'Available', className: 'bg-green-200' },
-    { label: 'Pending',   className: 'bg-yellow-200' },
-    { label: 'Confirmed', className: 'bg-red-200' },
-    { label: 'Cancelled', className: 'bg-gray-200' },
+    { label: 'Pending',   className: 'bg-indigo-200' },
+    { label: 'Partial',   className: 'bg-yellow-200' },
+    { label: 'Paid',      className: 'bg-red-200' },
+    { label: 'Playing',   className: 'bg-blue-200' },
+    { label: 'Done',      className: 'bg-gray-200' },
   ];
 
   return (
@@ -106,22 +106,18 @@ export default function App() {
 
       {/* Body */}
       <main className="flex-1 p-4 sm:p-6">
-        {error && (
+        {courtError && (
           <p className="mb-4 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-4 py-2">
-            {error}
+            {courtError}
           </p>
         )}
 
-        {loading ? (
-          <p className="text-center text-gray-400 py-16">Loading…</p>
-        ) : (
-          <ReservationGrid
-            courts={courts}
-            reservations={reservations}
-            slots={SLOTS}
-            onCellClick={openModal}
-          />
-        )}
+        <ScheduleGrid
+          date={date}
+          courts={courts}
+          refreshKey={refreshKey}
+          onCellClick={openModal}
+        />
       </main>
 
       {/* Modal */}
@@ -130,6 +126,8 @@ export default function App() {
           state={modal}
           onClose={() => setModal(null)}
           onSave={handleSave}
+          onMarkPaid={handleMarkPaid}
+          onMarkPlaying={handleMarkPlaying}
           onDelete={handleDelete}
         />
       )}
