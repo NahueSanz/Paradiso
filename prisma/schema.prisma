@@ -4,13 +4,32 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
+  url      = env("DIRECT_URL")
 }
 
 enum ReservationStatus {
   pending
   confirmed
   cancelled
+}
+
+enum ReservationType {
+  booking
+  class
+  tournament
+  challenge
+}
+
+enum PaymentStatus {
+  pending
+  partial
+  paid
+}
+
+enum PlayStatus {
+  scheduled
+  playing
+  finished
 }
 
 model Club {
@@ -40,8 +59,12 @@ model Reservation {
   timeEnd       DateTime          @db.Time
   clientName    String
   clientPhone   String?
+  type          ReservationType   @default(booking)
   status        ReservationStatus @default(pending)
+  totalPrice    Decimal?          @db.Decimal(10, 2)
   depositAmount Decimal?          @db.Decimal(10, 2)
+  paymentStatus PaymentStatus     @default(pending)
+  playStatus    PlayStatus        @default(scheduled)
   createdAt     DateTime          @default(now())
   updatedAt     DateTime          @updatedAt
 }

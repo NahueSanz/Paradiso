@@ -1,10 +1,11 @@
-import { ReservationStatus } from '@prisma/client';
+import { ReservationStatus, ReservationType } from '@prisma/client';
 import { NextFunction, Request, Response } from 'express';
 import * as reservationService from '../services/reservationService';
 
 const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 const TIME_REGEX = /^([01]\d|2[0-3]):[0-5]\d$/;
 const VALID_STATUSES = Object.values(ReservationStatus);
+const VALID_TYPES = Object.values(ReservationType);
 
 export async function getReservations(
   req: Request,
@@ -32,7 +33,7 @@ export async function createReservation(
   next: NextFunction,
 ): Promise<void> {
   try {
-    const { courtId, date, timeStart, timeEnd, clientName, clientPhone, depositAmount } = req.body;
+    const { courtId, date, timeStart, timeEnd, clientName, clientPhone, type, depositAmount } = req.body;
     const errors: string[] = [];
 
     if (courtId === undefined || !Number.isInteger(courtId) || courtId <= 0) {
@@ -53,6 +54,9 @@ export async function createReservation(
     if (clientPhone !== undefined && typeof clientPhone !== 'string') {
       errors.push('clientPhone must be a string');
     }
+    if (type !== undefined && !VALID_TYPES.includes(type)) {
+      errors.push(`type must be one of: ${VALID_TYPES.join(', ')}`);
+    }
     if (depositAmount !== undefined && (typeof depositAmount !== 'number' || depositAmount < 0)) {
       errors.push('depositAmount must be a non-negative number');
     }
@@ -69,6 +73,7 @@ export async function createReservation(
       timeEnd,
       clientName: clientName.trim(),
       clientPhone,
+      type,
       depositAmount,
     });
 
