@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import * as api from './api';
 import ScheduleGrid from './components/ScheduleGrid';
 import ReservationModal, { type FormData, type ModalState } from './components/ReservationModal';
@@ -8,12 +9,8 @@ function todayISO(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-function nextHour(slot: TimeSlot): string {
-  const h = parseInt(slot.slice(0, 2), 10);
-  return `${String(h + 1).padStart(2, '0')}:00`;
-}
-
 export default function App() {
+  const navigate = useNavigate();
   const [date, setDate]             = useState(todayISO());
   const [courts, setCourts]         = useState<Court[]>([]);
   const [courtError, setCourtError] = useState('');
@@ -21,7 +18,7 @@ export default function App() {
   const [modal, setModal]           = useState<ModalState | null>(null);
 
   useEffect(() => {
-    api.getCourts().then(setCourts).catch(() => setCourtError('Failed to load courts.'));
+    api.getCourts().then(setCourts).catch(() => setCourtError('Error al cargar las canchas.'));
   }, []);
 
   function refresh() { setRefreshKey((k) => k + 1); }
@@ -34,8 +31,10 @@ export default function App() {
   async function handleSave(form: FormData) {
     const base = {
       clientName: form.clientName,
-      ...(form.type         ? { type: form.type }                          : {}),
-      ...(form.totalPrice   ? { totalPrice: parseFloat(form.totalPrice) }  : {}),
+      timeStart:  form.timeStart,
+      timeEnd:    form.timeEnd,
+      ...(form.type          ? { type: form.type }                               : {}),
+      ...(form.totalPrice    ? { totalPrice: parseFloat(form.totalPrice) }       : {}),
       ...(form.depositAmount ? { depositAmount: parseFloat(form.depositAmount) } : {}),
     };
 
@@ -43,10 +42,8 @@ export default function App() {
       await api.updateReservation(modal.reservation.id, base);
     } else {
       await api.createReservation({
-        courtId:   modal!.courtId,
-        date:      modal!.date,
-        timeStart: modal!.slot,
-        timeEnd:   nextHour(modal!.slot),
+        courtId: modal!.courtId,
+        date:    modal!.date,
         ...base,
       });
     }
@@ -58,23 +55,17 @@ export default function App() {
     refresh();
   }
 
-  async function handleMarkPlaying(id: number) {
-    await api.updateReservation(id, { playStatus: 'playing' });
-    refresh();
-  }
-
   async function handleDelete(id: number) {
     await api.deleteReservation(id);
     refresh();
   }
 
   const legend = [
-    { label: 'Available', className: 'bg-green-200' },
-    { label: 'Pending',   className: 'bg-indigo-200' },
-    { label: 'Partial',   className: 'bg-yellow-200' },
-    { label: 'Paid',      className: 'bg-red-200' },
-    { label: 'Playing',   className: 'bg-blue-200' },
-    { label: 'Done',      className: 'bg-gray-200' },
+    { label: 'Disponible',  className: 'bg-gray-200' },
+    { label: 'Pendiente',   className: 'bg-yellow-300' },
+    { label: 'Seña',        className: 'bg-amber-300' },
+    { label: 'Pagado',      className: 'bg-green-300' },
+    { label: 'Finalizado',  className: 'bg-gray-400' },
   ];
 
   return (
@@ -84,6 +75,18 @@ export default function App() {
         <h1 className="text-xl font-bold text-indigo-700 tracking-tight">Padel Paradiso</h1>
 
         <div className="flex items-center gap-4">
+          <button
+            onClick={() => navigate('/dashboard')}
+            className="flex items-center gap-1.5 text-sm font-medium text-gray-500 hover:text-indigo-600
+                       px-3 py-1.5 rounded-lg hover:bg-indigo-50 border border-transparent
+                       hover:border-indigo-200 transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+            </svg>
+            Dashboard
+          </button>
           {/* Legend */}
           <div className="hidden sm:flex items-center gap-3 text-xs text-gray-600">
             {legend.map(({ label, className }) => (
@@ -127,7 +130,6 @@ export default function App() {
           onClose={() => setModal(null)}
           onSave={handleSave}
           onMarkPaid={handleMarkPaid}
-          onMarkPlaying={handleMarkPlaying}
           onDelete={handleDelete}
         />
       )}

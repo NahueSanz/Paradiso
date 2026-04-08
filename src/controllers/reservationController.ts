@@ -1,4 +1,4 @@
-import { ReservationStatus, ReservationType } from '@prisma/client';
+import { PaymentStatus, ReservationStatus, ReservationType } from '@prisma/client';
 import { NextFunction, Request, Response } from 'express';
 import * as reservationService from '../services/reservationService';
 
@@ -6,6 +6,13 @@ const DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 const TIME_REGEX = /^([01]\d|2[0-3]):[0-5]\d$/;
 const VALID_STATUSES = Object.values(ReservationStatus);
 const VALID_TYPES = Object.values(ReservationType);
+const VALID_PAYMENT_STATUSES = Object.values(PaymentStatus);
+
+function parseOptionalNumber(raw: unknown): number | undefined {
+  if (raw === '' || raw === undefined || raw === null) return undefined;
+  const n = Number(raw);
+  return n;
+}
 
 export async function getReservations(
   req: Request,
@@ -33,7 +40,19 @@ export async function createReservation(
   next: NextFunction,
 ): Promise<void> {
   try {
-    const { courtId, date, timeStart, timeEnd, clientName, clientPhone, type, depositAmount } = req.body;
+    const {
+      courtId,
+      date,
+      timeStart,
+      timeEnd,
+      clientName,
+      clientPhone,
+      type,
+    } = req.body;
+
+    const totalPrice = parseOptionalNumber(req.body.totalPrice);
+    const depositAmount = parseOptionalNumber(req.body.depositAmount);
+
     const errors: string[] = [];
 
     if (courtId === undefined || !Number.isInteger(courtId) || courtId <= 0) {
@@ -57,7 +76,10 @@ export async function createReservation(
     if (type !== undefined && !VALID_TYPES.includes(type)) {
       errors.push(`type must be one of: ${VALID_TYPES.join(', ')}`);
     }
-    if (depositAmount !== undefined && (typeof depositAmount !== 'number' || depositAmount < 0)) {
+    if (totalPrice !== undefined && (isNaN(totalPrice) || totalPrice < 0)) {
+      errors.push('totalPrice must be a non-negative number');
+    }
+    if (depositAmount !== undefined && (isNaN(depositAmount) || depositAmount < 0)) {
       errors.push('depositAmount must be a non-negative number');
     }
 
@@ -74,6 +96,7 @@ export async function createReservation(
       clientName: clientName.trim(),
       clientPhone,
       type,
+      totalPrice,
       depositAmount,
     });
 
@@ -95,7 +118,18 @@ export async function updateReservation(
       return;
     }
 
-    const { date, timeStart, timeEnd, clientName, clientPhone, depositAmount, status } = req.body;
+    const { date, timeStart, timeEnd, clientName, clientPhone, status, type, paymentStatus } = req.body;
+
+    // Normalize numeric fields: "" | null | undefined → undefined, else parse to number
+    const rawTotal = req.body.totalPrice;
+    const rawDeposit = req.body.depositAmount;
+    const totalPrice = rawTotal === '' || rawTotal === undefined || rawTotal === null
+      ? undefined
+      : Number(rawTotal);
+    const depositAmount = rawDeposit === '' || rawDeposit === undefined || rawDeposit === null
+      ? undefined
+      : Number(rawDeposit);
+
     const errors: string[] = [];
 
     if (date !== undefined && !DATE_REGEX.test(date)) {
@@ -113,15 +147,17 @@ export async function updateReservation(
     if (clientPhone !== undefined && clientPhone !== null && typeof clientPhone !== 'string') {
       errors.push('clientPhone must be a string or null');
     }
-    if (
-      depositAmount !== undefined &&
-      depositAmount !== null &&
-      (typeof depositAmount !== 'number' || depositAmount < 0)
-    ) {
-      errors.push('depositAmount must be a non-negative number or null');
+    if (totalPrice !== undefined && (isNaN(totalPrice) || totalPrice < 0)) {
+      errors.push('totalPrice must be a non-negative number');
+    }
+    if (depositAmount !== undefined && (isNaN(depositAmount) || depositAmount < 0)) {
+      errors.push('depositAmount must be a non-negative number');
     }
     if (status !== undefined && !VALID_STATUSES.includes(status)) {
       errors.push(`status must be one of: ${VALID_STATUSES.join(', ')}`);
+    }
+    if (paymentStatus !== undefined && !VALID_PAYMENT_STATUSES.includes(paymentStatus)) {
+      errors.push(`paymentStatus must be one of: ${VALID_PAYMENT_STATUSES.join(', ')}`);
     }
 
     if (errors.length) {
@@ -135,8 +171,11 @@ export async function updateReservation(
       timeEnd,
       clientName: clientName?.trim(),
       clientPhone,
+      totalPrice,
       depositAmount,
       status,
+      type,
+      paymentStatus,
     });
 
     res.json(reservation);

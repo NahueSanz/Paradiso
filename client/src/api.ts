@@ -56,3 +56,39 @@ export function updateReservation(id: number, data: UpdateReservationPayload): P
 export function deleteReservation(id: number): Promise<void> {
   return request(`/reservations/${id}`, { method: 'DELETE' });
 }
+
+export interface DayRevenue {
+  date: string;
+  totals: {
+    booking: number;
+    class: number;
+    challenge: number;
+    tournament: number;
+  };
+  total: number;
+}
+
+export interface RevenueData {
+  days: DayRevenue[];
+}
+
+export function getRevenue(from: string, to: string): Promise<RevenueData> {
+  return request(`/analytics/revenue?from=${from}&to=${to}`);
+}
+
+export interface ReservationReportRow {
+  id: number;
+  date: string;
+  courtName: string;
+  clientName: string;
+  type: string;
+  timeStart: string;
+  timeEnd: string;
+  paymentStatus: string;
+  totalPrice: number;
+  depositAmount: number;
+}
+
+export function getReservationsReport(from: string, to: string): Promise<ReservationReportRow[]> {
+  return request(`/analytics/reservations?from=${from}&to=${to}`);
+}

@@ -1,4 +1,4 @@
-import { PaymentStatus, PlayStatus, ReservationStatus, ReservationType } from '@prisma/client';
+import { PaymentStatus, ReservationStatus, ReservationType } from '@prisma/client';
 import prisma from '../lib/prisma';
 import { AppError } from '../middlewares/errorHandler';
 import { Prisma } from '@prisma/client';
@@ -56,21 +56,36 @@ async function assertCourtExists(courtId: number) {
   if (!court) throw new AppError('Court not found', 404);
 }
 
+function toNumber(value: Prisma.Decimal | number | null | undefined): number | undefined {
+  if (value === null || value === undefined) return undefined;
+  if (typeof value === 'number') return value;
+  return value.toNumber();
+}
+
 function derivePaymentStatus(totalPrice: number | undefined, depositAmount: number | undefined): PaymentStatus {
   if (totalPrice === undefined || depositAmount === undefined || depositAmount <= 0) return PaymentStatus.pending;
   if (depositAmount >= totalPrice) return PaymentStatus.paid;
   return PaymentStatus.partial;
 }
 
+function withRemainingAmount<T extends { totalPrice: Prisma.Decimal | null; depositAmount: Prisma.Decimal | null }>(
+  r: T,
+): T & { remainingAmount: number | null } {
+  const total = r.totalPrice != null ? Number(r.totalPrice) : null;
+  const deposit = r.depositAmount != null ? Number(r.depositAmount) : null;
+  const remainingAmount = total !== null && deposit !== null ? Math.max(0, total - deposit) : null;
+  return { ...r, remainingAmount };
+}
+
 // ── Queries ────────────────────────────────────────────────────────────────
 
 export async function getReservationsByDate(dateStr: string) {
-  const date = parseDate(dateStr);
-  return prisma.reservation.findMany({
-    where: { date },
+  const reservations = await prisma.reservation.findMany({
+    where: { date: parseDate(dateStr) },
     include: { court: { select: { id: true, name: true } } },
     orderBy: { timeStart: 'asc' },
   });
+  return reservations.map(withRemainingAmount);
 }
 
 // ── Commands ───────────────────────────────────────────────────────────────
@@ -100,19 +115,8 @@ export async function createReservation(input: CreateReservationInput) {
     depositAmount,
   } = input;
 
-  // Price and deposit rules
-  if (type === ReservationType.booking) {
-    if (!totalPrice || totalPrice <= 0) {
-      throw new AppError('booking reservations require a totalPrice greater than 0', 400);
-    }
-    if (depositAmount === undefined || depositAmount <= 0) {
-      throw new AppError('booking reservations require a depositAmount greater than 0', 400);
-    }
-    if (depositAmount > totalPrice) {
-      throw new AppError('depositAmount cannot exceed totalPrice', 400);
-    }
-  } else if (depositAmount !== undefined && depositAmount > 0) {
-    throw new AppError(`${type} reservations do not accept a deposit`, 400);
+  if (totalPrice !== undefined && depositAmount !== undefined && depositAmount > totalPrice) {
+    throw new AppError('depositAmount cannot exceed totalPrice', 400);
   }
 
   const parsedDate = parseDate(date);
@@ -131,9 +135,7 @@ export async function createReservation(input: CreateReservationInput) {
   await assertCourtExists(courtId);
   await assertNoOverlap(courtId, parsedDate, parsedStart, parsedEnd);
 
-  const isBooking = type === ReservationType.booking;
-
-  return prisma.reservation.create({
+  const result = await prisma.reservation.create({
     data: {
       courtId,
       date: parsedDate,
@@ -142,12 +144,14 @@ export async function createReservation(input: CreateReservationInput) {
       clientName,
       clientPhone,
       type,
-      totalPrice: isBooking ? totalPrice : null,
-      depositAmount: isBooking ? depositAmount : null,
+      totalPrice: totalPrice ?? null,
+      depositAmount: depositAmount ?? null,
       paymentStatus: derivePaymentStatus(totalPrice, depositAmount),
     },
     include: { court: { select: { id: true, name: true } } },
   });
+
+  return withRemainingAmount(result);
 }
 
 export interface UpdateReservationInput {
@@ -159,7 +163,8 @@ export interface UpdateReservationInput {
   totalPrice?: number | null;
   depositAmount?: number | null;
   status?: ReservationStatus;
-  playStatus?: PlayStatus;
+  type?: ReservationType;
+  paymentStatus?: PaymentStatus;
 }
 
 export async function updateReservation(id: number, input: UpdateReservationInput) {
@@ -178,31 +183,36 @@ export async function updateReservation(id: number, input: UpdateReservationInpu
     throw new AppError('timeEnd must be after timeStart', 400);
   }
 
-  // Only re-check overlap when time or date actually changes
   const timeChanged = input.date || input.timeStart || input.timeEnd;
   if (timeChanged) {
     await assertNoOverlap(existing.courtId, parsedDate, parsedStart, parsedEnd, id);
   }
-  
-  function toNumber(value: Prisma.Decimal | number | null | undefined): number | undefined {
-  if (value === null || value === undefined) return undefined;
-  if (typeof value === 'number') return value;
-  return value.toNumber();
-}
 
-const newTotalPrice = toNumber(
-  input.totalPrice !== undefined ? input.totalPrice : existing.totalPrice
-);
+  // Resolve effective total price
+  const newTotalPrice =
+    input.totalPrice !== undefined ? (input.totalPrice ?? undefined) : toNumber(existing.totalPrice);
 
-const newDepositAmount = toNumber(
-  input.depositAmount !== undefined ? input.depositAmount : existing.depositAmount
-);
+  // Resolve deposit: if marking paid, deposit = total; otherwise use input or keep existing
+  let newDepositAmount: number | null | undefined; // undefined = keep existing
 
-  if (newDepositAmount != null && newTotalPrice != null && newDepositAmount > newTotalPrice) {
+  if (input.paymentStatus === PaymentStatus.paid) {
+    newDepositAmount = newTotalPrice !== undefined ? newTotalPrice : null;
+  } else if (input.depositAmount !== undefined) {
+    newDepositAmount = input.depositAmount; // can be null to clear
+  }
+
+  // Effective deposit for validation
+  const effectiveDeposit =
+    newDepositAmount !== undefined ? (newDepositAmount ?? undefined) : toNumber(existing.depositAmount);
+
+  if (newTotalPrice !== undefined && effectiveDeposit !== undefined && effectiveDeposit > newTotalPrice) {
     throw new AppError('depositAmount cannot exceed totalPrice', 400);
   }
 
-  return prisma.reservation.update({
+  const resolvedPaymentStatus =
+    input.paymentStatus ?? derivePaymentStatus(newTotalPrice, effectiveDeposit);
+
+  const result = await prisma.reservation.update({
     where: { id },
     data: {
       date: parsedDate,
@@ -211,14 +221,15 @@ const newDepositAmount = toNumber(
       clientName: input.clientName ?? existing.clientName,
       clientPhone: input.clientPhone !== undefined ? input.clientPhone : existing.clientPhone,
       totalPrice: input.totalPrice !== undefined ? input.totalPrice : existing.totalPrice,
-      depositAmount:
-        input.depositAmount !== undefined ? input.depositAmount : existing.depositAmount,
-      paymentStatus: derivePaymentStatus(newTotalPrice, newDepositAmount ?? undefined),
-      playStatus: input.playStatus ?? existing.playStatus,
+      depositAmount: newDepositAmount !== undefined ? newDepositAmount : existing.depositAmount,
+      type: input.type ?? existing.type,
+      paymentStatus: resolvedPaymentStatus,
       status: input.status ?? existing.status,
     },
     include: { court: { select: { id: true, name: true } } },
   });
+
+  return withRemainingAmount(result);
 }
 
 export async function deleteReservation(id: number) {
