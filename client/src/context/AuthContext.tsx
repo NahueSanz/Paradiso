@@ -1,9 +1,10 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
 import type { User } from '../types';
+import { API_URL } from '../api';
 
 const TOKEN_KEY = 'pp_token';
 const USER_KEY  = 'pp_user';
-const BASE      = '/api';
+const BASE      = `${API_URL}/api`;
 
 interface AuthContextValue {
   user:     User | null;

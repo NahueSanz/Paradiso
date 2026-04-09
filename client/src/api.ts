@@ -1,6 +1,7 @@
 import type { Club, Court, Membership, PaymentStatus, PlayStatus, Reservation } from './types';
 
-const BASE = '/api';
+export const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+const BASE = `${API_URL}/api`;
 
 function authHeaders(): Record<string, string> {
   const token = localStorage.getItem('pp_token');
