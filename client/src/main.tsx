@@ -9,6 +9,7 @@ import InvitePage from './pages/InvitePage';
 import ForgotPassword from './pages/ForgotPassword';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ClubProvider } from './context/ClubContext';
+import { MembershipProvider } from './context/MembershipContext';
 import './index.css';
 
 /** Redirect to /login when not authenticated */
@@ -37,6 +38,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
     <BrowserRouter>
       <AuthProvider>
         <ClubProvider>
+        <MembershipProvider>
         <Routes>
           {/* Public routes */}
           <Route path="/login"    element={<GuestOnly><Login /></GuestOnly>} />
@@ -60,6 +62,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
           {/* Fallback */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+        </MembershipProvider>
         </ClubProvider>
       </AuthProvider>
     </BrowserRouter>

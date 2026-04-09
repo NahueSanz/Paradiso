@@ -9,25 +9,28 @@ interface Props {
 export default function InviteModal({ onClose }: Props) {
   const { selectedClubId } = useClub();
 
-  const [email,    setEmail]    = useState('');
-  const [loading,  setLoading]  = useState(false);
-  const [error,    setError]    = useState('');
-  const [inviteUrl, setInviteUrl] = useState<string | null>(null);
-  const [copied,   setCopied]   = useState(false);
+  const [email,       setEmail]       = useState('');
+  const [displayName, setDisplayName] = useState('');
+  const [loading,     setLoading]     = useState(false);
+  const [error,       setError]       = useState('');
+  const [inviteUrl,   setInviteUrl]   = useState<string | null>(null);
+  const [copied,      setCopied]      = useState(false);
 
   const inputRef = useRef<HTMLInputElement>(null);
   useEffect(() => { inputRef.current?.focus(); }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!email.trim())    { setError('El correo es requerido.'); return; }
-    if (!selectedClubId)  { setError('No hay un club seleccionado.'); return; }
+    if (!email.trim())                { setError('El correo es requerido.'); return; }
+    if (!displayName.trim())          { setError('El nombre visible es requerido.'); return; }
+    if (displayName.trim().length < 2){ setError('El nombre debe tener al menos 2 caracteres.'); return; }
+    if (!selectedClubId)              { setError('No hay un club seleccionado.'); return; }
 
     setError('');
     setLoading(true);
     try {
-      const { token } = await api.createInvitation(email.trim(), selectedClubId);
-      const url = `${window.location.origin}/invite?token=${token}`;
+      const result = await api.createInvitation(email.trim(), selectedClubId, displayName.trim());
+      const url = `${window.location.origin}/invite?token=${result.token}`;
       setInviteUrl(url);
     } catch (err: any) {
       setError(err.message ?? 'Error al crear la invitación.');
@@ -61,11 +64,11 @@ export default function InviteModal({ onClose }: Props) {
         </div>
 
         {!inviteUrl ? (
-          /* ── Step 1: email form ── */
+          /* ── Step 1: form ── */
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Correo electrónico del empleado
+                Correo electrónico <span className="text-red-400">*</span>
               </label>
               <input
                 ref={inputRef}
@@ -77,10 +80,29 @@ export default function InviteModal({ onClose }: Props) {
                 className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm
                            focus:outline-none focus:ring-2 focus:ring-indigo-400"
               />
-              {error && (
-                <p className="text-xs text-red-600 mt-1">{error}</p>
-              )}
             </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Nombre visible <span className="text-red-400">*</span>
+              </label>
+              <input
+                type="text"
+                required
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+                placeholder="Ej: Juan"
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm
+                           focus:outline-none focus:ring-2 focus:ring-indigo-400"
+              />
+              <p className="text-xs text-gray-400 mt-1">
+                Así aparecerá en las reservas que cree este empleado.
+              </p>
+            </div>
+
+            {error && (
+              <p className="text-xs text-red-600 mt-1">{error}</p>
+            )}
 
             <div className="flex gap-2 pt-1">
               <button
@@ -108,7 +130,7 @@ export default function InviteModal({ onClose }: Props) {
               <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
               </svg>
-              <p className="text-sm font-medium">Invitación creada correctamente</p>
+              <p className="text-sm font-medium">Invitación creada para <strong>{displayName}</strong></p>
             </div>
 
             <div>

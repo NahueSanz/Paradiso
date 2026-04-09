@@ -8,6 +8,7 @@ import InviteModal from './components/InviteModal';
 import type { Court, Reservation, TimeSlot } from './types';
 import { useAuth } from './context/AuthContext';
 import { useClub } from './context/ClubContext';
+import { useMembership } from './context/MembershipContext';
 
 function todayISO(): string {
   return new Date().toISOString().slice(0, 10);
@@ -161,14 +162,94 @@ function RenameClubModal({ currentName, onClose, onRenamed }: RenameClubModalPro
   );
 }
 
+// ── Profile Modal ─────────────────────────────────────────────────────────────
+
+interface ProfileModalProps {
+  currentDisplayName: string;
+  onClose: () => void;
+  onSave: (name: string) => Promise<void>;
+}
+
+function ProfileModal({ currentDisplayName, onClose, onSave }: ProfileModalProps) {
+  const [name, setName]     = useState(currentDisplayName);
+  const [saving, setSaving] = useState(false);
+  const [error, setError]   = useState('');
+  const inputRef            = useRef<HTMLInputElement>(null);
+
+  useEffect(() => { inputRef.current?.focus(); inputRef.current?.select(); }, []);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!name.trim() || name.trim().length < 2) { setError('El nombre debe tener al menos 2 caracteres.'); return; }
+    setSaving(true);
+    setError('');
+    try {
+      await onSave(name.trim());
+      onClose();
+    } catch (err: any) {
+      setError(err.message ?? 'Error al guardar.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6">
+        <h2 className="text-lg font-bold text-gray-800 mb-4">Mi perfil</h2>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Nombre visible</label>
+            <input
+              ref={inputRef}
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Ej: Juan"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none
+                         focus:ring-2 focus:ring-indigo-400"
+            />
+            <p className="text-xs text-gray-400 mt-1">
+              Así aparecerá en las reservas que crees.
+            </p>
+            {error && <p className="text-xs text-red-600 mt-1">{error}</p>}
+          </div>
+          <div className="flex gap-2 pt-1">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 px-4 py-2 text-sm rounded-lg border border-gray-200 text-gray-600
+                         hover:bg-gray-50 transition-colors"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={saving}
+              className="flex-1 px-4 py-2 text-sm rounded-lg bg-indigo-600 text-white font-medium
+                         hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+            >
+              {saving ? 'Guardando…' : 'Guardar'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 // ── App ───────────────────────────────────────────────────────────────────────
 
 export default function App() {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
   const { clubs, selectedClubId, loadingClubs, refreshClubs } = useClub();
+  const { currentMembership, updateDisplayName } = useMembership();
   const isOwner = user?.role === 'owner';
   const selectedClub = clubs.find((c) => c.id === selectedClubId);
+
+  const displayName = currentMembership?.displayName ?? user?.name ?? '';
+  const roleLabel   = isOwner ? 'Dueño' : 'Empleado';
 
   const [date, setDate]                   = useState(todayISO());
   const [courts, setCourts]               = useState<Court[]>([]);
@@ -180,6 +261,7 @@ export default function App() {
   const [showCreateClubModal, setShowCreateClubModal]   = useState(false);
   const [showInviteModal,    setShowInviteModal]        = useState(false);
   const [showRenameClubModal, setShowRenameClubModal]   = useState(false);
+  const [showProfileModal, setShowProfileModal]         = useState(false);
 
   // Fetch courts whenever selectedClubId or courtsRefreshKey changes
   useEffect(() => {
@@ -280,8 +362,8 @@ export default function App() {
               </svg>
             </button>
           )}
-          {/* Club selector — always visible for owners, visible for employees when clubs exist */}
-          <ClubSelector />
+          {/* Club selector — solo para dueños */}
+          {isOwner && <ClubSelector />}
         </div>
 
         <div className="flex items-center gap-3 flex-wrap justify-end">
@@ -331,16 +413,31 @@ export default function App() {
             </button>
           )}
 
-          {/* Indicador de rol */}
-          <span
-            className={`text-xs px-2.5 py-1 rounded-full font-medium border
-              ${isOwner
-                ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
-                : 'bg-gray-100 text-gray-600 border-gray-200'
-              }`}
-          >
-            {isOwner ? 'Dueño' : 'Empleado'}
-          </span>
+          {/* Nombre + rol (clickable → perfil) */}
+          {currentMembership && (
+            <button
+              onClick={() => setShowProfileModal(true)}
+              title="Editar perfil"
+              className={`text-xs px-2.5 py-1 rounded-full font-medium border transition-colors
+                ${isOwner
+                  ? 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100'
+                  : 'bg-gray-100 text-gray-600 border-gray-200 hover:bg-gray-200'
+                }`}
+            >
+              {displayName} <span className="opacity-60">({roleLabel})</span>
+            </button>
+          )}
+          {!currentMembership && (
+            <span
+              className={`text-xs px-2.5 py-1 rounded-full font-medium border
+                ${isOwner
+                  ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                  : 'bg-gray-100 text-gray-600 border-gray-200'
+                }`}
+            >
+              {displayName} <span className="opacity-60">({roleLabel})</span>
+            </span>
+          )}
 
           {/* Cerrar sesión */}
           <button
@@ -433,6 +530,15 @@ export default function App() {
           currentName={selectedClub.name}
           onClose={() => setShowRenameClubModal(false)}
           onRenamed={handleRenameClub}
+        />
+      )}
+
+      {/* Profile Modal */}
+      {showProfileModal && currentMembership && (
+        <ProfileModal
+          currentDisplayName={currentMembership.displayName}
+          onClose={() => setShowProfileModal(false)}
+          onSave={updateDisplayName}
         />
       )}
     </div>

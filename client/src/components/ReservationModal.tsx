@@ -107,9 +107,7 @@ export default function ReservationModal({
   const [busy,  setBusy]                = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
 
-  // Estado optimista para pago — se activa antes de que responda el servidor
-  const [paidOptimistic, setPaidOptimistic] = useState(false);
-  const isPaid = reservation?.paymentStatus === "paid" || paidOptimistic;
+  const isPaid = reservation?.paymentStatus === "paid";
 
   // ── estado de duración ──
   const initDuration = isEdit
@@ -157,22 +155,6 @@ export default function ReservationModal({
       await fn();
       onClose();
     } catch (err) {
-      setError((err as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  // Registrar pago con actualización optimista — no cierra el modal
-  async function handleMarkPaid() {
-    if (isPaid || busy) return;
-    setError("");
-    setBusy(true);
-    setPaidOptimistic(true);
-    try {
-      await onMarkPaid(reservation!.id);
-    } catch (err) {
-      setPaidOptimistic(false);
       setError((err as Error).message);
     } finally {
       setBusy(false);
@@ -259,6 +241,22 @@ export default function ReservationModal({
             &times;
           </button>
         </div>
+
+        {/* ── autoría (solo en edición) ── */}
+        {isEdit && (reservation?.createdByMembership || reservation?.updatedByMembership) && (
+          <div className="mx-6 mt-3 flex flex-wrap gap-x-4 gap-y-0.5">
+            {reservation?.createdByMembership && (
+              <span className="text-[11px] text-gray-400">
+                Creado por: <span className="font-medium text-gray-500">{reservation.createdByMembership.displayName}</span>
+              </span>
+            )}
+            {reservation?.updatedByMembership && (
+              <span className="text-[11px] text-gray-400">
+                Última edición: <span className="font-medium text-gray-500">{reservation.updatedByMembership.displayName}</span>
+              </span>
+            )}
+          </div>
+        )}
 
         {/* ── resumen financiero (solo en edición) ── */}
         {isEdit && (
@@ -423,7 +421,7 @@ export default function ReservationModal({
               <button
                 type="button"
                 disabled={isPaid || busy}
-                onClick={handleMarkPaid}
+                onClick={() => run(async () => { await onMarkPaid(reservation!.id); })}
                 className={`w-full py-2.5 text-sm font-semibold rounded-lg border transition-all duration-150
                   ${isPaid
                     ? 'bg-emerald-50 border-emerald-300 text-emerald-700 cursor-default'

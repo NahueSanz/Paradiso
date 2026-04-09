@@ -14,6 +14,18 @@ export interface User {
   role: 'owner' | 'employee';
 }
 
+export interface Membership {
+  id: number;
+  clubId: number;
+  role: 'owner' | 'employee';
+  displayName: string;
+}
+
+export interface MembershipInfo {
+  id: number;
+  displayName: string;
+}
+
 export interface Court {
   id: number;
   name: string;
@@ -34,6 +46,8 @@ export interface Reservation {
   paymentStatus: PaymentStatus;
   playStatus: PlayStatus;
   court: { id: number; name: string };
+  createdByMembership?: MembershipInfo | null;
+  updatedByMembership?: MembershipInfo | null;
 }
 
 // Slot: "HH:00", e.g. "08:00"

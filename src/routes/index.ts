@@ -6,6 +6,7 @@ import healthRoutes from './healthRoutes';
 import reservationRoutes from './reservationRoutes';
 import analyticsRoutes from './analyticsRoutes';
 import invitationRoutes from './invitationRoutes';
+import membershipRoutes from './membershipRoutes';
 import { authenticate } from '../middlewares/authenticate';
 import { acceptInvitation } from '../controllers/invitationController';
 
@@ -24,5 +25,6 @@ router.use('/courts', courtRoutes);
 router.use('/reservations', reservationRoutes);
 router.use('/analytics', analyticsRoutes);
 router.use('/invitations', invitationRoutes);
+router.use('/membership', membershipRoutes);
 
 export default router;

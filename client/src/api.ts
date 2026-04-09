@@ -1,10 +1,15 @@
-import type { Club, Court, PaymentStatus, PlayStatus, Reservation } from './types';
+import type { Club, Court, Membership, PaymentStatus, PlayStatus, Reservation } from './types';
 
 const BASE = '/api';
 
 function authHeaders(): Record<string, string> {
   const token = localStorage.getItem('pp_token');
   return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+function clubIdHeader(): Record<string, string> {
+  const clubId = localStorage.getItem('pp_selected_club');
+  return clubId ? { 'X-Club-Id': clubId } : {};
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -56,7 +61,7 @@ export function updateClub(id: number, data: { name: string }): Promise<Club> {
 }
 
 export function getReservations(date: string): Promise<Reservation[]> {
-  return request(`/reservations?date=${date}`);
+  return request(`/reservations?date=${date}`, { headers: clubIdHeader() });
 }
 
 export interface CreateReservationPayload {
@@ -71,7 +76,7 @@ export interface CreateReservationPayload {
 }
 
 export function createReservation(data: CreateReservationPayload): Promise<Reservation> {
-  return request('/reservations', { method: 'POST', body: JSON.stringify(data) });
+  return request('/reservations', { method: 'POST', body: JSON.stringify(data), headers: clubIdHeader() });
 }
 
 export interface UpdateReservationPayload {
@@ -84,7 +89,7 @@ export interface UpdateReservationPayload {
 }
 
 export function updateReservation(id: number, data: UpdateReservationPayload): Promise<Reservation> {
-  return request(`/reservations/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+  return request(`/reservations/${id}`, { method: 'PUT', body: JSON.stringify(data), headers: clubIdHeader() });
 }
 
 export function deleteReservation(id: number): Promise<void> {
@@ -127,14 +132,26 @@ export function getReservationsReport(from: string, to: string, clubId: number):
   return request(`/analytics/reservations?from=${from}&to=${to}&clubId=${clubId}`);
 }
 
+// ── Memberships ───────────────────────────────────────────────────────────────
+
+export function getMembership(clubId: number): Promise<Membership> {
+  return request(`/membership?clubId=${clubId}`);
+}
+
+export function updateMembership(id: number, data: { displayName: string }): Promise<Membership> {
+  return request(`/membership/${id}`, { method: 'PATCH', body: JSON.stringify(data) });
+}
+
 // ── Invitations ───────────────────────────────────────────────────────────────
 
 export interface InvitationResponse {
+  status: string;
   token: string;
+  invitation: { token: string; [key: string]: unknown };
 }
 
-export function createInvitation(email: string, clubId: number): Promise<InvitationResponse> {
-  return request('/invitations', { method: 'POST', body: JSON.stringify({ email, clubId }) });
+export function createInvitation(email: string, clubId: number, displayName: string): Promise<InvitationResponse> {
+  return request('/invitations', { method: 'POST', body: JSON.stringify({ email, clubId, displayName }) });
 }
 
 export interface AcceptInvitationPayload {

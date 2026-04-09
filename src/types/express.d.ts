@@ -7,6 +7,13 @@ declare global {
         id: number;
         role: Role;
       };
+      membership?: {
+        id: number;
+        userId: number;
+        clubId: number;
+        role: Role;
+        displayName: string;
+      };
     }
   }
 }

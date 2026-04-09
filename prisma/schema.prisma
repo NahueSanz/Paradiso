@@ -21,6 +21,7 @@ model User {
   clubs       Club[]
   clubId      Int?
   club        Club?        @relation("EmployeeClub", fields: [clubId], references: [id])
+  memberships Membership[]
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
 }
@@ -58,19 +59,37 @@ model Club {
   employees   User[]       @relation("EmployeeClub")
   courts      Court[]
   invitations Invitation[]
+  memberships Membership[]
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
 }
 
 model Invitation {
-  id         Int       @id @default(autoincrement())
-  email      String
-  clubId     Int
-  club       Club      @relation(fields: [clubId], references: [id])
-  role       Role      @default(employee)
-  token      String    @unique
-  createdAt  DateTime  @default(now())
-  acceptedAt DateTime?
+  id          Int       @id @default(autoincrement())
+  email       String
+  clubId      Int
+  club        Club      @relation(fields: [clubId], references: [id])
+  role        Role      @default(employee)
+  token       String    @unique
+  displayName String?
+  createdAt   DateTime  @default(now())
+  acceptedAt  DateTime?
+}
+
+model Membership {
+  id          Int    @id @default(autoincrement())
+  userId      Int
+  clubId      Int
+  role        Role
+  displayName String
+
+  user        User   @relation(fields: [userId], references: [id])
+  club        Club   @relation(fields: [clubId], references: [id])
+
+  createdReservations Reservation[] @relation("CreatedBy")
+  updatedReservations Reservation[] @relation("UpdatedBy")
+
+  @@unique([userId, clubId])
 }
 
 model Court {
@@ -84,20 +103,24 @@ model Court {
 }
 
 model Reservation {
-  id            Int               @id @default(autoincrement())
-  courtId       Int
-  court         Court             @relation(fields: [courtId], references: [id])
-  date          DateTime          @db.Date
-  timeStart     DateTime          @db.Time
-  timeEnd       DateTime          @db.Time
-  clientName    String
-  clientPhone   String?
-  type          ReservationType   @default(booking)
-  status        ReservationStatus @default(pending)
-  totalPrice    Decimal?          @db.Decimal(10, 2)
-  depositAmount Decimal?          @db.Decimal(10, 2)
-  paymentStatus PaymentStatus     @default(pending)
-  playStatus    PlayStatus        @default(scheduled)
-  createdAt     DateTime          @default(now())
-  updatedAt     DateTime          @updatedAt
+  id                    Int               @id @default(autoincrement())
+  courtId               Int
+  court                 Court             @relation(fields: [courtId], references: [id])
+  date                  DateTime          @db.Date
+  timeStart             DateTime          @db.Time
+  timeEnd               DateTime          @db.Time
+  clientName            String
+  clientPhone           String?
+  type                  ReservationType   @default(booking)
+  status                ReservationStatus @default(pending)
+  totalPrice            Decimal?          @db.Decimal(10, 2)
+  depositAmount         Decimal?          @db.Decimal(10, 2)
+  paymentStatus         PaymentStatus     @default(pending)
+  playStatus            PlayStatus        @default(scheduled)
+  createdByMembershipId Int?
+  updatedByMembershipId Int?
+  createdByMembership   Membership?       @relation("CreatedBy", fields: [createdByMembershipId], references: [id])
+  updatedByMembership   Membership?       @relation("UpdatedBy", fields: [updatedByMembershipId], references: [id])
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
 }

@@ -98,6 +98,7 @@ export async function createReservation(
       type,
       totalPrice,
       depositAmount,
+      membershipId: req.membership?.id,
     }, req.user!.id);
 
     res.status(201).json(reservation);
@@ -176,6 +177,7 @@ export async function updateReservation(
       status,
       type,
       paymentStatus,
+      membershipId: req.membership?.id,
     }, req.user!.id);
 
     res.json(reservation);

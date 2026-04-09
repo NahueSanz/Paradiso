@@ -5,8 +5,11 @@ import {
   getReservations,
   updateReservation,
 } from '../controllers/reservationController';
+import { resolveMembership } from '../middlewares/resolveMembership';
 
 const router = Router();
+
+router.use(resolveMembership);
 
 router.get('/', getReservations);
 router.post('/', createReservation);

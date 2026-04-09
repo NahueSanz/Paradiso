@@ -74,6 +74,8 @@ function withRemainingAmount<T extends { totalPrice: Prisma.Decimal | null; depo
 
 // ── Queries ────────────────────────────────────────────────────────────────
 
+const membershipSelect = { select: { id: true, displayName: true } } as const;
+
 export async function getReservationsByDate(dateStr: string, userId: number) {
   const reservations = await prisma.reservation.findMany({
     where: {
@@ -87,7 +89,11 @@ export async function getReservationsByDate(dateStr: string, userId: number) {
         },
       },
     },
-    include: { court: { select: { id: true, name: true } } },
+    include: {
+      court: { select: { id: true, name: true } },
+      createdByMembership: membershipSelect,
+      updatedByMembership: membershipSelect,
+    },
     orderBy: { timeStart: 'asc' },
   });
   return reservations.map(withRemainingAmount);
@@ -105,6 +111,7 @@ export interface CreateReservationInput {
   type?: ReservationType;
   totalPrice?: number;
   depositAmount?: number;
+  membershipId?: number;
 }
 
 export async function createReservation(input: CreateReservationInput, userId: number) {
@@ -118,6 +125,7 @@ export async function createReservation(input: CreateReservationInput, userId: n
     type = ReservationType.booking,
     totalPrice,
     depositAmount,
+    membershipId,
   } = input;
 
   if (totalPrice !== undefined && depositAmount !== undefined && depositAmount > totalPrice) {
@@ -163,8 +171,13 @@ export async function createReservation(input: CreateReservationInput, userId: n
       depositAmount: depositAmount ?? null,
       paymentStatus: resolvedPaymentStatus,
       playStatus: resolvedPaymentStatus === PaymentStatus.paid ? PlayStatus.finished : undefined,
+      createdByMembershipId: membershipId ?? null,
     },
-    include: { court: { select: { id: true, name: true } } },
+    include: {
+      court: { select: { id: true, name: true } },
+      createdByMembership: membershipSelect,
+      updatedByMembership: membershipSelect,
+    },
   });
 
   return withRemainingAmount(result);
@@ -182,6 +195,7 @@ export interface UpdateReservationInput {
   type?: ReservationType;
   paymentStatus?: PaymentStatus;
   playStatus?: PlayStatus;
+  membershipId?: number;
 }
 
 export async function updateReservation(id: number, input: UpdateReservationInput, userId: number) {
@@ -237,6 +251,7 @@ export async function updateReservation(id: number, input: UpdateReservationInpu
     totalPrice: number | null; depositAmount: number | null;
     status: ReservationStatus; type: ReservationType;
     paymentStatus: PaymentStatus; playStatus: PlayStatus;
+    updatedByMembershipId: number | null;
   }> = {};
 
   if (input.date !== undefined) data.date = parsedDate;
@@ -255,10 +270,16 @@ export async function updateReservation(id: number, input: UpdateReservationInpu
   if (input.paymentStatus !== undefined) data.paymentStatus = input.paymentStatus;
   if (input.playStatus !== undefined) data.playStatus = input.playStatus;
 
+  if (input.membershipId !== undefined) data.updatedByMembershipId = input.membershipId;
+
   const result = await prisma.reservation.update({
     where: { id },
     data,
-    include: { court: { select: { id: true, name: true } } },
+    include: {
+      court: { select: { id: true, name: true } },
+      createdByMembership: membershipSelect,
+      updatedByMembership: membershipSelect,
+    },
   });
 
   return withRemainingAmount(result);
