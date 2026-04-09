@@ -1,5 +1,6 @@
 import prisma from '../lib/prisma';
 import { ReservationType } from '@prisma/client';
+import { AppError } from '../middlewares/errorHandler';
 
 export interface ReservationReportRow {
   id: number;
@@ -14,7 +15,10 @@ export interface ReservationReportRow {
   depositAmount: number;
 }
 
-export async function getReservationsReport(from: string, to: string): Promise<ReservationReportRow[]> {
+export async function getReservationsReport(from: string, to: string, clubId: number, ownerId: number): Promise<ReservationReportRow[]> {
+  const club = await prisma.club.findUnique({ where: { id: clubId } });
+  if (!club || club.ownerId !== ownerId) throw new AppError('Forbidden', 403);
+
   const fromDate = new Date(`${from}T00:00:00.000Z`);
   const toDate   = new Date(`${to}T23:59:59.999Z`);
 
@@ -22,6 +26,7 @@ export async function getReservationsReport(from: string, to: string): Promise<R
     where: {
       date:   { gte: fromDate, lte: toDate },
       status: { not: 'cancelled' },
+      court:  { clubId },
     },
     include: { court: { select: { name: true } } },
     orderBy: [{ date: 'asc' }, { timeStart: 'asc' }],
@@ -57,7 +62,10 @@ function zeroDayTotals(): Record<ReservationType, number> {
   return { booking: 0, class: 0, challenge: 0, tournament: 0 };
 }
 
-export async function getRevenue(from: string, to: string): Promise<RevenueResult> {
+export async function getRevenue(from: string, to: string, clubId: number, ownerId: number): Promise<RevenueResult> {
+  const club = await prisma.club.findUnique({ where: { id: clubId } });
+  if (!club || club.ownerId !== ownerId) throw new AppError('Forbidden', 403);
+
   const fromDate = new Date(`${from}T00:00:00.000Z`);
   const toDate   = new Date(`${to}T23:59:59.999Z`);
 
@@ -66,6 +74,7 @@ export async function getRevenue(from: string, to: string): Promise<RevenueResul
       date:          { gte: fromDate, lte: toDate },
       status:        { not: 'cancelled' },
       paymentStatus: { in: ['paid', 'partial'] },
+      court:         { clubId },
     },
     select: {
       date:          true,

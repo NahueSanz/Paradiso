@@ -1,6 +1,19 @@
 export type PaymentStatus = 'pending' | 'partial' | 'paid';
 export type PlayStatus    = 'scheduled' | 'playing' | 'finished';
 
+export interface Club {
+  id: number;
+  name: string;
+  ownerId: number;
+}
+
+export interface User {
+  id: number;
+  email: string;
+  name: string;
+  role: 'owner' | 'employee';
+}
+
 export interface Court {
   id: number;
   name: string;

@@ -1,14 +1,28 @@
 import { Router } from 'express';
+import authRoutes from './authRoutes';
+import clubRoutes from './clubRoutes';
 import courtRoutes from './courtRoutes';
 import healthRoutes from './healthRoutes';
 import reservationRoutes from './reservationRoutes';
 import analyticsRoutes from './analyticsRoutes';
+import invitationRoutes from './invitationRoutes';
+import { authenticate } from '../middlewares/authenticate';
+import { acceptInvitation } from '../controllers/invitationController';
 
 const router = Router();
 
 router.use('/health', healthRoutes);
+router.use('/auth', authRoutes);
+
+// Accept invitation is public — no JWT needed
+router.post('/invitations/accept', acceptInvitation);
+
+router.use(authenticate);
+
+router.use('/clubs', clubRoutes);
 router.use('/courts', courtRoutes);
 router.use('/reservations', reservationRoutes);
 router.use('/analytics', analyticsRoutes);
+router.use('/invitations', invitationRoutes);
 
 export default router;

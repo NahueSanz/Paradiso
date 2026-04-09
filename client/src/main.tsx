@@ -1,17 +1,67 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import App from './App';
 import Dashboard from './pages/Dashboard';
+import Login from './pages/Login';
+import Register from './pages/Register';
+import InvitePage from './pages/InvitePage';
+import ForgotPassword from './pages/ForgotPassword';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import { ClubProvider } from './context/ClubContext';
 import './index.css';
+
+/** Redirect to /login when not authenticated */
+function RequireAuth({ children }: { children: React.ReactNode }) {
+  const { token } = useAuth();
+  if (!token) return <Navigate to="/login" replace />;
+  return <>{children}</>;
+}
+
+/** Redirect to / when already authenticated */
+function GuestOnly({ children }: { children: React.ReactNode }) {
+  const { token } = useAuth();
+  if (token) return <Navigate to="/" replace />;
+  return <>{children}</>;
+}
+
+/** Restrict to owners only */
+function OwnerOnly({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth();
+  if (user?.role !== 'owner') return <Navigate to="/" replace />;
+  return <>{children}</>;
+}
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<App />} />
-        <Route path="/dashboard" element={<Dashboard />} />
-      </Routes>
+      <AuthProvider>
+        <ClubProvider>
+        <Routes>
+          {/* Public routes */}
+          <Route path="/login"    element={<GuestOnly><Login /></GuestOnly>} />
+          <Route path="/register" element={<GuestOnly><Register /></GuestOnly>} />
+          <Route path="/invite"          element={<InvitePage />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />
+
+          {/* Protected routes */}
+          <Route path="/" element={<RequireAuth><App /></RequireAuth>} />
+          <Route
+            path="/dashboard"
+            element={
+              <RequireAuth>
+                <OwnerOnly>
+                  <Dashboard />
+                </OwnerOnly>
+              </RequireAuth>
+            }
+          />
+
+          {/* Fallback */}
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+        </ClubProvider>
+      </AuthProvider>
     </BrowserRouter>
   </React.StrictMode>,
 );

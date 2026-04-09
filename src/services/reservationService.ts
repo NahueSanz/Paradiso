@@ -1,4 +1,4 @@
-import { PaymentStatus, ReservationStatus, ReservationType } from '@prisma/client';
+import { PaymentStatus, PlayStatus, ReservationStatus, ReservationType } from '@prisma/client';
 import prisma from '../lib/prisma';
 import { AppError } from '../middlewares/errorHandler';
 import { Prisma } from '@prisma/client';
@@ -51,11 +51,6 @@ async function assertNoOverlap(
   }
 }
 
-async function assertCourtExists(courtId: number) {
-  const court = await prisma.court.findUnique({ where: { id: courtId } });
-  if (!court) throw new AppError('Court not found', 404);
-}
-
 function toNumber(value: Prisma.Decimal | number | null | undefined): number | undefined {
   if (value === null || value === undefined) return undefined;
   if (typeof value === 'number') return value;
@@ -79,9 +74,19 @@ function withRemainingAmount<T extends { totalPrice: Prisma.Decimal | null; depo
 
 // ── Queries ────────────────────────────────────────────────────────────────
 
-export async function getReservationsByDate(dateStr: string) {
+export async function getReservationsByDate(dateStr: string, userId: number) {
   const reservations = await prisma.reservation.findMany({
-    where: { date: parseDate(dateStr) },
+    where: {
+      date: parseDate(dateStr),
+      court: {
+        club: {
+          OR: [
+            { ownerId: userId },
+            { employees: { some: { id: userId } } },
+          ],
+        },
+      },
+    },
     include: { court: { select: { id: true, name: true } } },
     orderBy: { timeStart: 'asc' },
   });
@@ -102,7 +107,7 @@ export interface CreateReservationInput {
   depositAmount?: number;
 }
 
-export async function createReservation(input: CreateReservationInput) {
+export async function createReservation(input: CreateReservationInput, userId: number) {
   const {
     courtId,
     date,
@@ -132,8 +137,18 @@ export async function createReservation(input: CreateReservationInput) {
     throw new AppError('timeEnd must be after timeStart', 400);
   }
 
-  await assertCourtExists(courtId);
+  const court = await prisma.court.findUnique({
+    where: { id: courtId },
+    include: { club: { select: { ownerId: true, employees: { select: { id: true } } } } },
+  });
+  if (!court) throw new AppError('Court not found', 404);
+  const isOwner = court.club.ownerId === userId;
+  const isEmployee = court.club.employees.some((e) => e.id === userId);
+  if (!isOwner && !isEmployee) throw new AppError('Forbidden', 403);
+
   await assertNoOverlap(courtId, parsedDate, parsedStart, parsedEnd);
+
+  const resolvedPaymentStatus = derivePaymentStatus(totalPrice, depositAmount);
 
   const result = await prisma.reservation.create({
     data: {
@@ -146,7 +161,8 @@ export async function createReservation(input: CreateReservationInput) {
       type,
       totalPrice: totalPrice ?? null,
       depositAmount: depositAmount ?? null,
-      paymentStatus: derivePaymentStatus(totalPrice, depositAmount),
+      paymentStatus: resolvedPaymentStatus,
+      playStatus: resolvedPaymentStatus === PaymentStatus.paid ? PlayStatus.finished : undefined,
     },
     include: { court: { select: { id: true, name: true } } },
   });
@@ -165,16 +181,25 @@ export interface UpdateReservationInput {
   status?: ReservationStatus;
   type?: ReservationType;
   paymentStatus?: PaymentStatus;
+  playStatus?: PlayStatus;
 }
 
-export async function updateReservation(id: number, input: UpdateReservationInput) {
-  const existing = await prisma.reservation.findUnique({ where: { id } });
+export async function updateReservation(id: number, input: UpdateReservationInput, userId: number) {
+  const existing = await prisma.reservation.findUnique({
+    where: { id },
+    include: { court: { select: { club: { select: { ownerId: true, employees: { select: { id: true } } } } } } },
+  });
   if (!existing) throw new AppError('Reservation not found', 404);
+
+  const isOwner = existing.court.club.ownerId === userId;
+  const isEmployee = existing.court.club.employees.some((e) => e.id === userId);
+  if (!isOwner && !isEmployee) throw new AppError('Forbidden', 403);
 
   if (existing.status === ReservationStatus.cancelled) {
     throw new AppError('Cannot modify a cancelled reservation', 400);
   }
 
+  // Compute effective times for validation — only write to DB if explicitly provided
   const parsedDate = input.date ? parseDate(input.date) : existing.date;
   const parsedStart = input.timeStart ? parseTime(input.timeStart) : existing.timeStart;
   const parsedEnd = input.timeEnd ? parseTime(input.timeEnd) : existing.timeEnd;
@@ -188,53 +213,67 @@ export async function updateReservation(id: number, input: UpdateReservationInpu
     await assertNoOverlap(existing.courtId, parsedDate, parsedStart, parsedEnd, id);
   }
 
-  // Resolve effective total price
+  // When marking as paid, auto-set depositAmount = totalPrice if not explicitly provided
   const newTotalPrice =
     input.totalPrice !== undefined ? (input.totalPrice ?? undefined) : toNumber(existing.totalPrice);
 
-  // Resolve deposit: if marking paid, deposit = total; otherwise use input or keep existing
-  let newDepositAmount: number | null | undefined; // undefined = keep existing
-
-  if (input.paymentStatus === PaymentStatus.paid) {
-    newDepositAmount = newTotalPrice !== undefined ? newTotalPrice : null;
-  } else if (input.depositAmount !== undefined) {
-    newDepositAmount = input.depositAmount; // can be null to clear
+  let resolvedDepositAmount = input.depositAmount;
+  if (input.paymentStatus === PaymentStatus.paid && resolvedDepositAmount === undefined) {
+    resolvedDepositAmount = newTotalPrice !== undefined ? newTotalPrice : null;
   }
 
-  // Effective deposit for validation
   const effectiveDeposit =
-    newDepositAmount !== undefined ? (newDepositAmount ?? undefined) : toNumber(existing.depositAmount);
+    resolvedDepositAmount !== undefined ? (resolvedDepositAmount ?? undefined) : toNumber(existing.depositAmount);
 
   if (newTotalPrice !== undefined && effectiveDeposit !== undefined && effectiveDeposit > newTotalPrice) {
     throw new AppError('depositAmount cannot exceed totalPrice', 400);
   }
 
-  const resolvedPaymentStatus =
-    input.paymentStatus ?? derivePaymentStatus(newTotalPrice, effectiveDeposit);
+  // Build update payload dynamically — only include fields that were explicitly provided.
+  // This prevents concurrent requests from overwriting each other's changes.
+  const data: Partial<{
+    date: Date; timeStart: Date; timeEnd: Date;
+    clientName: string; clientPhone: string | null;
+    totalPrice: number | null; depositAmount: number | null;
+    status: ReservationStatus; type: ReservationType;
+    paymentStatus: PaymentStatus; playStatus: PlayStatus;
+  }> = {};
+
+  if (input.date !== undefined) data.date = parsedDate;
+  if (input.timeStart !== undefined) data.timeStart = parsedStart;
+  if (input.timeEnd !== undefined) data.timeEnd = parsedEnd;
+  if (input.clientName !== undefined) data.clientName = input.clientName;
+  if (input.clientPhone !== undefined) data.clientPhone = input.clientPhone;
+
+  if (input.totalPrice !== undefined) data.totalPrice = input.totalPrice;
+  if (resolvedDepositAmount !== undefined) data.depositAmount = resolvedDepositAmount;
+
+  if (input.status !== undefined) data.status = input.status;
+  if (input.type !== undefined) data.type = input.type;
+
+  // CRITICAL: only overwrite these if the caller explicitly sent them
+  if (input.paymentStatus !== undefined) data.paymentStatus = input.paymentStatus;
+  if (input.playStatus !== undefined) data.playStatus = input.playStatus;
 
   const result = await prisma.reservation.update({
     where: { id },
-    data: {
-      date: parsedDate,
-      timeStart: parsedStart,
-      timeEnd: parsedEnd,
-      clientName: input.clientName ?? existing.clientName,
-      clientPhone: input.clientPhone !== undefined ? input.clientPhone : existing.clientPhone,
-      totalPrice: input.totalPrice !== undefined ? input.totalPrice : existing.totalPrice,
-      depositAmount: newDepositAmount !== undefined ? newDepositAmount : existing.depositAmount,
-      type: input.type ?? existing.type,
-      paymentStatus: resolvedPaymentStatus,
-      status: input.status ?? existing.status,
-    },
+    data,
     include: { court: { select: { id: true, name: true } } },
   });
 
   return withRemainingAmount(result);
 }
 
-export async function deleteReservation(id: number) {
-  const existing = await prisma.reservation.findUnique({ where: { id } });
+export async function deleteReservation(id: number, userId: number) {
+  const existing = await prisma.reservation.findUnique({
+    where: { id },
+    include: { court: { select: { club: { select: { ownerId: true, employees: { select: { id: true } } } } } } },
+  });
   if (!existing) throw new AppError('Reservation not found', 404);
+
+  const isOwner = existing.court.club.ownerId === userId;
+  const isEmployee = existing.court.club.employees.some((e) => e.id === userId);
+  if (!isOwner && !isEmployee) throw new AppError('Forbidden', 403);
 
   await prisma.reservation.delete({ where: { id } });
 }

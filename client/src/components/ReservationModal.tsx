@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { Reservation, TimeSlot } from "../types";
 
-// ── public types ──────────────────────────────────────────────────────────────
+// ── tipos públicos ─────────────────────────────────────────────────────────────
 
 export interface ModalState {
   courtId: number;
@@ -28,7 +28,7 @@ interface Props {
   onDelete: (id: number) => Promise<void>;
 }
 
-// ── constants ─────────────────────────────────────────────────────────────────
+// ── constantes ────────────────────────────────────────────────────────────────
 
 const RESERVATION_TYPE_LABELS: Record<string, string> = {
   booking:    "Partido",
@@ -63,7 +63,7 @@ function addMinutes(slot: TimeSlot, minutes: number): string {
 function defaultDurationForType(type: string): string {
   if (type === "class")      return "60";
   if (type === "tournament") return "custom";
-  return "90"; // booking, challenge
+  return "90"; // partido, desafío
 }
 
 function durationFromReservation(r: Reservation): { duration: string; customMinutes: string } {
@@ -80,7 +80,7 @@ function formatCurrency(amount: number): string {
   return `$${Math.round(amount).toLocaleString("es-AR")}`;
 }
 
-// ── component ─────────────────────────────────────────────────────────────────
+// ── componente ────────────────────────────────────────────────────────────────
 
 export default function ReservationModal({
   state,
@@ -92,7 +92,7 @@ export default function ReservationModal({
   const { reservation, courtName, date, slot } = state;
   const isEdit = !!reservation;
 
-  // ── form state ──
+  // ── estado del formulario ──
   const [clientName,    setClientName]    = useState(reservation?.clientName ?? "");
   const [type,          setType]          = useState(reservation?.type ?? "booking");
 
@@ -102,10 +102,16 @@ export default function ReservationModal({
   const [depositAmount, setDepositAmount] = useState(
     reservation?.depositAmount != null ? String(reservation.depositAmount) : ""
   );
-  const [error,         setError]         = useState("");
-  const [busy,          setBusy]          = useState(false);
 
-  // ── duration state ──
+  const [error, setError]               = useState("");
+  const [busy,  setBusy]                = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+
+  // Estado optimista para pago — se activa antes de que responda el servidor
+  const [paidOptimistic, setPaidOptimistic] = useState(false);
+  const isPaid = reservation?.paymentStatus === "paid" || paidOptimistic;
+
+  // ── estado de duración ──
   const initDuration = isEdit
     ? durationFromReservation(reservation!)
     : { duration: defaultDurationForType(type), customMinutes: "" };
@@ -113,23 +119,29 @@ export default function ReservationModal({
   const [duration,      setDuration]      = useState(initDuration.duration);
   const [customMinutes, setCustomMinutes] = useState(initDuration.customMinutes);
 
-  // Update duration default when type changes (new reservations only)
+  // Actualizar duración por defecto al cambiar el tipo (solo en nuevas reservas)
   useEffect(() => {
     if (isEdit) return;
     setDuration(defaultDurationForType(type));
     setCustomMinutes("");
   }, [type, isEdit]);
 
-  // ── computed times ──
+  // ── tiempos calculados ──
   const effectiveMinutes = duration === "custom" ? parseInt(customMinutes || "0", 10) : parseInt(duration, 10);
   const timeStart = slot;
   const timeEnd   = effectiveMinutes > 0 ? addMinutes(slot, effectiveMinutes) : "";
 
-  // ── financial summary (live from form state) ──
+  // ── validación precio / seña ──
+  const depositExceedsTotal =
+    totalPrice !== '' && depositAmount !== '' &&
+    parseFloat(depositAmount) > parseFloat(totalPrice);
+  const isFree = totalPrice === '' || parseFloat(totalPrice) === 0;
+
+  // ── resumen financiero (calculado en tiempo real desde el formulario) ──
   const summaryTotal     = parseFloat(totalPrice)    || 0;
   const summaryDeposit   = parseFloat(depositAmount) || 0;
   const summaryRemaining = summaryTotal - summaryDeposit;
-  const summaryPaid      = reservation?.paymentStatus === "paid" || (summaryTotal > 0 && summaryRemaining <= 0);
+  const summaryPaid      = isPaid || (summaryTotal > 0 && summaryRemaining <= 0);
 
   const nameRef = useRef<HTMLInputElement>(null);
   useEffect(() => { nameRef.current?.focus(); }, []);
@@ -145,6 +157,22 @@ export default function ReservationModal({
       await fn();
       onClose();
     } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // Registrar pago con actualización optimista — no cierra el modal
+  async function handleMarkPaid() {
+    if (isPaid || busy) return;
+    setError("");
+    setBusy(true);
+    setPaidOptimistic(true);
+    try {
+      await onMarkPaid(reservation!.id);
+    } catch (err) {
+      setPaidOptimistic(false);
       setError((err as Error).message);
     } finally {
       setBusy(false);
@@ -177,6 +205,10 @@ export default function ReservationModal({
         setError("La seña debe ser un número no negativo.");
         return;
       }
+      if (parsedTotalPrice !== undefined && n > parsedTotalPrice) {
+        setError("La seña no puede ser mayor que el precio total.");
+        return;
+      }
       parsedDepositAmount = n;
     }
 
@@ -194,11 +226,8 @@ export default function ReservationModal({
 
   function handleDelete() {
     if (!reservation) return;
-    if (!confirm("¿Eliminar esta reserva?")) return;
-    run(() => onDelete(reservation.id));
+    setConfirmingDelete(true);
   }
-
-  const isPaid = reservation?.paymentStatus === "paid";
 
   return (
     <div
@@ -207,7 +236,7 @@ export default function ReservationModal({
     >
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 animate-in fade-in zoom-in-95 duration-150">
 
-        {/* ── header ── */}
+        {/* ── encabezado ── */}
         <div className="flex items-start justify-between px-6 pt-6 pb-4 border-b">
           <div>
             <h2 className="text-base font-semibold text-gray-900">
@@ -231,26 +260,34 @@ export default function ReservationModal({
           </button>
         </div>
 
-        {/* ── financial summary (edit mode only) ── */}
+        {/* ── resumen financiero (solo en edición) ── */}
         {isEdit && (
           <div className="mx-6 mt-4 rounded-xl bg-gray-50 border border-gray-200 px-4 py-3 space-y-1">
             <div className="flex justify-between text-sm">
-              <span className="text-gray-500">💰 Total</span>
-              <span className="font-semibold text-gray-800">{formatCurrency(summaryTotal)}</span>
+              <span className="text-gray-500">Total</span>
+              <span className="font-bold text-gray-800 text-base">{formatCurrency(summaryTotal)}</span>
             </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-500">💵 Pagado</span>
-              <span className="font-semibold text-gray-800">{formatCurrency(summaryDeposit)}</span>
-            </div>
-            <div className="flex justify-between text-sm border-t border-gray-200 pt-1">
+            {summaryDeposit > 0 && (
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-500">Seña abonada</span>
+                <span className="font-semibold text-gray-700">{formatCurrency(summaryDeposit)}</span>
+              </div>
+            )}
+            {summaryDeposit > 0 && !summaryPaid && (
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-500">Restante</span>
+                <span className="font-semibold text-orange-600">{formatCurrency(summaryRemaining)}</span>
+              </div>
+            )}
+            <div className="flex justify-between text-sm border-t border-gray-200 pt-1 mt-1">
               {summaryPaid ? (
                 <>
-                  <span className="text-gray-500">✅ Estado</span>
-                  <span className="font-bold text-green-600">Pagado ✓</span>
+                  <span className="text-gray-500">Estado</span>
+                  <span className="font-bold text-emerald-600">Pagado ✓</span>
                 </>
               ) : (
                 <>
-                  <span className="text-gray-500">❗ Falta</span>
+                  <span className="text-gray-500">Adeuda</span>
                   <span className="font-bold text-red-500">{formatCurrency(summaryRemaining)}</span>
                 </>
               )}
@@ -258,7 +295,7 @@ export default function ReservationModal({
           </div>
         )}
 
-        {/* ── form ── */}
+        {/* ── formulario ── */}
         <form
           id="reservation-form"
           onSubmit={handleSubmit}
@@ -309,7 +346,7 @@ export default function ReservationModal({
             </div>
           </div>
 
-          {/* Custom duration input */}
+          {/* Duración personalizada */}
           {duration === "custom" && (
             <div>
               <label className="block text-xs font-medium text-gray-500 mb-1">
@@ -338,10 +375,10 @@ export default function ReservationModal({
               <input
                 type="number"
                 min="0"
-                step="0.01"
+                step="1"
                 value={totalPrice}
                 onChange={(e) => setTotalPrice(e.target.value)}
-                placeholder="0.00"
+                placeholder="0"
                 className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 transition-shadow"
               />
             </div>
@@ -352,14 +389,26 @@ export default function ReservationModal({
               <input
                 type="number"
                 min="0"
-                step="0.01"
+                step="1"
                 value={depositAmount}
                 onChange={(e) => setDepositAmount(e.target.value)}
-                placeholder="0.00"
+                placeholder="0"
                 className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 transition-shadow"
               />
             </div>
           </div>
+
+          {/* Free reservation hint */}
+          {isFree && (
+            <p className="text-xs text-gray-400 -mt-1">Reserva sin costo</p>
+          )}
+
+          {/* Deposit exceeds total error */}
+          {depositExceedsTotal && (
+            <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2 -mt-1">
+              La seña no puede ser mayor que el precio total
+            </p>
+          )}
 
           {/* Error */}
           {error && (
@@ -368,22 +417,26 @@ export default function ReservationModal({
             </p>
           )}
 
-          {/* ── Registrar pago (solo edición) ── */}
+          {/* ── Botón registrar pago (solo edición) ── */}
           {isEdit && (
             <div className="pt-1">
               <button
                 type="button"
-                disabled={busy || isPaid}
-                onClick={() => run(() => onMarkPaid(reservation!.id))}
-                className="w-full py-2 text-sm font-medium rounded-lg border border-green-300 text-green-700 hover:bg-green-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                disabled={isPaid || busy}
+                onClick={handleMarkPaid}
+                className={`w-full py-2.5 text-sm font-semibold rounded-lg border transition-all duration-150
+                  ${isPaid
+                    ? 'bg-emerald-50 border-emerald-300 text-emerald-700 cursor-default'
+                    : 'border-emerald-500 text-emerald-700 hover:bg-emerald-50 active:bg-emerald-100'
+                  } disabled:cursor-not-allowed`}
               >
-                {isPaid ? "Pagado ✓" : "Registrar pago"}
+                {isPaid ? 'Pagado ✓' : 'Registrar pago completo'}
               </button>
             </div>
           )}
         </form>
 
-        {/* ── footer ── */}
+        {/* ── pie del modal ── */}
         <div className="flex items-center gap-2 px-6 pb-5">
           {isEdit && (
             <button
@@ -406,7 +459,7 @@ export default function ReservationModal({
             <button
               form="reservation-form"
               type="submit"
-              disabled={busy}
+              disabled={busy || depositExceedsTotal}
               className="px-5 py-2 text-sm font-medium bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors"
             >
               {busy ? "Guardando…" : isEdit ? "Actualizar" : "Crear"}
@@ -414,6 +467,39 @@ export default function ReservationModal({
           </div>
         </div>
       </div>
+
+      {/* ── Delete Reservation Confirm Overlay ── */}
+      {confirmingDelete && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6">
+            <h2 className="text-lg font-bold text-gray-800 mb-2">Eliminar reserva</h2>
+            <p className="text-sm text-gray-500 mb-6">¿Estás seguro? Esta acción no se puede deshacer.</p>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setConfirmingDelete(false)}
+                disabled={busy}
+                className="flex-1 px-4 py-2 text-sm rounded-lg border border-gray-200 text-gray-600
+                           hover:bg-gray-50 disabled:opacity-50 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => {
+                  setConfirmingDelete(false);
+                  run(() => onDelete(reservation!.id));
+                }}
+                className="flex-1 px-4 py-2 text-sm rounded-lg bg-red-500 text-white font-medium
+                           hover:bg-red-600 disabled:opacity-50 transition-colors"
+              >
+                {busy ? 'Eliminando…' : 'Eliminar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,44 +1,55 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { getReservations } from '../api';
 import type { Court, Reservation, TimeSlot } from '../types';
 
-// 30-min slots from 08:00 to 23:00 (30 slots)
-const SLOTS: TimeSlot[] = Array.from({ length: 30 }, (_, i) => {
-  const total = 8 * 60 + i * 30;
-  const h = Math.floor(total / 60);
-  const m = total % 60;
+// Club hours: 09:00 → 01:00 (next day) — 32 half-hour slots
+// Post-midnight hours (00:xx, 01:xx) are treated as virtual minutes > 1440
+// so all comparisons remain monotonically increasing.
+const OPEN_VIRTUAL  = 9 * 60;        // 540  → 09:00
+const CLOSE_VIRTUAL = 25 * 60;       // 1500 → 01:00 next day
+const NUM_SLOTS     = (CLOSE_VIRTUAL - OPEN_VIRTUAL) / 30; // 32
+
+const SLOTS: TimeSlot[] = Array.from({ length: NUM_SLOTS }, (_, i) => {
+  const virtual = OPEN_VIRTUAL + i * 30;
+  const real    = virtual % (24 * 60);
+  const h = Math.floor(real / 60);
+  const m = real % 60;
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
 });
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
-function toMinutes(iso: string): number {
-  const h = parseInt(iso.slice(11, 13), 10);
-  const m = parseInt(iso.slice(14, 16), 10);
-  return h * 60 + m;
+/** Convert ISO datetime string to virtual minutes (post-midnight hours get +1440). */
+function toVirtualMinutes(iso: string): number {
+  const h   = parseInt(iso.slice(11, 13), 10);
+  const m   = parseInt(iso.slice(14, 16), 10);
+  const raw = h * 60 + m;
+  return raw < OPEN_VIRTUAL ? raw + 24 * 60 : raw;
 }
 
-function slotToMinutes(slot: TimeSlot): number {
+/** Convert HH:MM slot label to virtual minutes. */
+function slotToVirtualMinutes(slot: TimeSlot): number {
   const [h, m] = slot.split(':').map(Number);
-  return h * 60 + m;
+  const raw    = h * 60 + m;
+  return raw < OPEN_VIRTUAL ? raw + 24 * 60 : raw;
 }
 
 function coversSlot(r: Reservation, slot: TimeSlot): boolean {
-  const slotStart = slotToMinutes(slot);
+  const slotStart = slotToVirtualMinutes(slot);
   const slotEnd   = slotStart + 30;
-  const startMin  = toMinutes(r.timeStart);
-  const endMin    = toMinutes(r.timeEnd);
+  const startMin  = toVirtualMinutes(r.timeStart);
+  const endMin    = toVirtualMinutes(r.timeEnd);
   return startMin < slotEnd && endMin > slotStart;
 }
 
-/** True only for the first slot the reservation occupies. */
+/** Verdadero solo para la primera franja que ocupa la reserva. */
 function isFirstCoveredSlot(r: Reservation, slot: TimeSlot): boolean {
-  const slotStart = slotToMinutes(slot);
-  const startMin  = toMinutes(r.timeStart);
+  const slotStart = slotToVirtualMinutes(slot);
+  const startMin  = toVirtualMinutes(r.timeStart);
   return startMin >= slotStart && startMin < slotStart + 30;
 }
 
-/** Number of 30-min rows this reservation spans. */
+/** Cantidad de filas de 30 min que ocupa la reserva. */
 function getRowSpan(r: Reservation): number {
   return SLOTS.filter((s) => coversSlot(r, s)).length;
 }
@@ -51,24 +62,21 @@ function formatCurrency(amount: number): string {
   return `$${Math.round(amount).toLocaleString('es-AR')}`;
 }
 
-// ── color logic ───────────────────────────────────────────────────────────────
+// ── colores por estado de pago ────────────────────────────────────────────────
 
 function cellBg(r: Reservation): string {
-  if (r.playStatus === 'finished') {
-    return 'bg-gray-100 hover:bg-gray-200 border-gray-300 text-gray-500';
-  }
   if (r.paymentStatus === 'paid') {
-    return 'bg-green-100 hover:bg-green-200 border-green-400 text-green-900';
+    return 'bg-emerald-500 hover:bg-emerald-600 border-emerald-600 text-white';
   }
   if (r.paymentStatus === 'partial') {
-    return 'bg-amber-100 hover:bg-amber-200 border-amber-400 text-amber-900';
+    return 'bg-orange-200 hover:bg-orange-300 border-orange-400 text-orange-900';
   }
-  return 'bg-yellow-50 hover:bg-yellow-100 border-yellow-300 text-yellow-900';
+  return 'bg-amber-100 hover:bg-amber-200 border-amber-400 text-amber-900';
 }
 
-// ── cell ──────────────────────────────────────────────────────────────────────
+// ── celda ─────────────────────────────────────────────────────────────────────
 
-const EMPTY_STYLE = 'bg-gray-50 hover:bg-gray-100 border-gray-200 text-gray-400';
+const EMPTY_STYLE = 'bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-400';
 
 interface CellProps {
   reservation: Reservation | undefined;
@@ -92,7 +100,8 @@ function Cell({ reservation, onClick }: CellProps) {
   const remaining = total - deposit;
   const fullyPaid = reservation.paymentStatus === 'paid' || (total > 0 && remaining <= 0);
 
-  const timeRange = `${isoToHHMM(reservation.timeStart)} – ${isoToHHMM(reservation.timeEnd)}`;
+  const timeRange  = `${isoToHHMM(reservation.timeStart)} – ${isoToHHMM(reservation.timeEnd)}`;
+  const isPaidStyle = reservation.paymentStatus === 'paid';
 
   return (
     <button
@@ -103,16 +112,24 @@ function Cell({ reservation, onClick }: CellProps) {
         <span className="font-bold truncate text-[13px]">
           {reservation.clientName}
         </span>
-        <span className="text-[10px] font-normal opacity-70 mt-0.5">
+        <span className={`text-[10px] font-normal mt-0.5 ${isPaidStyle ? 'opacity-80' : 'opacity-70'}`}>
           {timeRange}
         </span>
         <span className="flex flex-col mt-1 gap-px text-[10px] font-normal">
-          <span>Total: {formatCurrency(total)}</span>
-          <span>Seña: {formatCurrency(deposit)}</span>
+          {total > 0 && (
+            <span>{formatCurrency(total)} total</span>
+          )}
+          {deposit > 0 && (
+            <span>Seña: {formatCurrency(deposit)}</span>
+          )}
           {fullyPaid ? (
-            <span className="font-semibold text-green-600">Pagado ✓</span>
-          ) : (
-            <span className="font-semibold text-red-500">Falta: {formatCurrency(remaining)}</span>
+            <span className={`font-semibold ${isPaidStyle ? 'text-white' : 'text-emerald-700'}`}>
+              Pagado ✓
+            </span>
+          ) : total > 0 && (
+            <span className="font-semibold text-red-600">
+              Falta: {formatCurrency(remaining)}
+            </span>
           )}
         </span>
       </span>
@@ -120,19 +137,45 @@ function Cell({ reservation, onClick }: CellProps) {
   );
 }
 
-// ── grid ──────────────────────────────────────────────────────────────────────
+// ── grilla ────────────────────────────────────────────────────────────────────
 
 interface Props {
   date: string;
   courts: Court[];
   refreshKey?: number;
+  isOwner?: boolean;
   onCellClick: (courtId: number, slot: TimeSlot, reservation?: Reservation) => void;
+  onDeleteCourt?: (id: number) => Promise<void>;
+  onRenameCourt?: (id: number, name: string) => Promise<void>;
 }
 
-export default function ScheduleGrid({ date, courts, refreshKey = 0, onCellClick }: Props) {
+export default function ScheduleGrid({
+  date,
+  courts,
+  refreshKey = 0,
+  isOwner = false,
+  onCellClick,
+  onDeleteCourt,
+  onRenameCourt,
+}: Props) {
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [loading, setLoading]           = useState(false);
   const [error, setError]               = useState('');
+
+  // delete court modal state
+  const [pendingDelete, setPendingDelete]   = useState<Court | null>(null);
+  const [deletingCourt, setDeletingCourt]   = useState(false);
+
+  // rename court modal state
+  const [pendingRename, setPendingRename]   = useState<Court | null>(null);
+  const [renameValue, setRenameValue]       = useState('');
+  const [renameSaving, setRenameSaving]     = useState(false);
+  const [renameError, setRenameError]       = useState('');
+
+  const renameInputRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (pendingRename) renameInputRef.current?.focus();
+  }, [pendingRename]);
 
   useEffect(() => {
     let cancelled = false;
@@ -160,53 +203,211 @@ export default function ScheduleGrid({ date, courts, refreshKey = 0, onCellClick
   }
 
   if (courts.length === 0) {
-    return <p className="text-center text-gray-400 py-16">No hay canchas disponibles.</p>;
+    return (
+      <div className="text-center py-16">
+        <p className="text-gray-400">No hay canchas disponibles.</p>
+        {isOwner && (
+          <p className="text-sm text-gray-400 mt-1">
+            Usá el botón <strong>"Agregar cancha"</strong> para crear la primera.
+          </p>
+        )}
+      </div>
+    );
+  }
+
+  // Use narrower columns when there are many courts so more fit on screen
+  const colWidth = courts.length <= 4 ? 'min-w-[160px]' : courts.length <= 8 ? 'min-w-[130px]' : 'min-w-[110px]';
+
+  async function confirmDelete() {
+    if (!pendingDelete || !onDeleteCourt) return;
+    setDeletingCourt(true);
+    try {
+      await onDeleteCourt(pendingDelete.id);
+      setPendingDelete(null);
+    } finally {
+      setDeletingCourt(false);
+    }
+  }
+
+  async function confirmRename(e: React.FormEvent) {
+    e.preventDefault();
+    if (!pendingRename || !onRenameCourt) return;
+    if (!renameValue.trim()) { setRenameError('El nombre es requerido.'); return; }
+    setRenameSaving(true);
+    setRenameError('');
+    try {
+      await onRenameCourt(pendingRename.id, renameValue.trim());
+      setPendingRename(null);
+    } catch (err: any) {
+      setRenameError(err.message ?? 'Error al renombrar.');
+    } finally {
+      setRenameSaving(false);
+    }
   }
 
   return (
-    <div className="overflow-x-auto">
-      <table className="min-w-full border-separate border-spacing-1">
-        <thead>
-          <tr>
-            <th className="w-16 text-xs text-gray-400 font-normal text-right pr-2">Hora</th>
-            {courts.map((court) => (
-              <th key={court.id} className="text-sm font-semibold text-center text-gray-700 pb-1 min-w-[120px]">
-                {court.name}
+    <>
+      <div className="overflow-x-auto rounded-lg border border-gray-100">
+        <table className="min-w-full border-separate border-spacing-1">
+          <thead>
+            <tr>
+              {/* Sticky time header */}
+              <th className="sticky left-0 z-20 bg-white w-14 text-xs text-gray-400 font-normal text-right pr-2">
+                Hora
               </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {SLOTS.map((slot) => (
-            <tr key={slot}>
-              <td className="text-xs text-gray-400 text-right pr-2 align-top pt-4 whitespace-nowrap">
-                {slot}
-              </td>
-              {courts.map((court) => {
-                const reservation = reservations.find(
-                  (r) => r.courtId === court.id && coversSlot(r, slot),
-                );
-
-                // Slot is already covered by a rowSpan from the first row → skip TD entirely
-                if (reservation && !isFirstCoveredSlot(reservation, slot)) {
-                  return null;
-                }
-
-                const span = reservation ? getRowSpan(reservation) : 1;
-
-                return (
-                  <td key={court.id} rowSpan={span > 1 ? span : undefined} className="align-stretch">
-                    <Cell
-                      reservation={reservation}
-                      onClick={() => onCellClick(court.id, slot, reservation)}
-                    />
-                  </td>
-                );
-              })}
+              {courts.map((court) => (
+                <th
+                  key={court.id}
+                  className={`${colWidth} text-sm font-semibold text-center text-gray-700 pb-1 group`}
+                >
+                  <div className="flex items-center justify-center gap-0.5">
+                    <span className="truncate">{court.name}</span>
+                    {isOwner && (
+                      <>
+                        {onRenameCourt && (
+                          <button
+                            onClick={() => {
+                              setPendingRename(court);
+                              setRenameValue(court.name);
+                              setRenameError('');
+                            }}
+                            title={`Renombrar ${court.name}`}
+                            className="opacity-0 group-hover:opacity-100 transition-opacity ml-0.5 p-0.5 rounded
+                                       text-gray-300 hover:text-indigo-500 hover:bg-indigo-50"
+                          >
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                                d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                            </svg>
+                          </button>
+                        )}
+                        {onDeleteCourt && (
+                          <button
+                            onClick={() => setPendingDelete(court)}
+                            title={`Eliminar ${court.name}`}
+                            className="opacity-0 group-hover:opacity-100 transition-opacity ml-0.5 p-0.5 rounded
+                                       text-gray-300 hover:text-red-500 hover:bg-red-50"
+                          >
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                                d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </button>
+                        )}
+                      </>
+                    )}
+                  </div>
+                </th>
+              ))}
             </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+          </thead>
+          <tbody>
+            {SLOTS.map((slot) => (
+              <tr key={slot}>
+                {/* Sticky time cell */}
+                <td className="sticky left-0 z-10 bg-white text-xs text-gray-400 text-right pr-2 align-top pt-1 whitespace-nowrap shadow-[1px_0_0_0_#f1f5f9]">
+                  {slot}
+                </td>
+                {courts.map((court) => {
+                  const reservation = reservations.find(
+                    (r) => r.courtId === court.id && coversSlot(r, slot),
+                  );
+
+                  // La franja ya está cubierta por un rowSpan → omitir TD
+                  if (reservation && !isFirstCoveredSlot(reservation, slot)) {
+                    return null;
+                  }
+
+                  const span = reservation ? getRowSpan(reservation) : 1;
+
+                  return (
+                    <td key={court.id} rowSpan={span > 1 ? span : undefined} className="align-stretch">
+                      <Cell
+                        reservation={reservation}
+                        onClick={() => onCellClick(court.id, slot, reservation)}
+                      />
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* ── Delete Court Modal ── */}
+      {pendingDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6">
+            <h2 className="text-lg font-bold text-gray-800 mb-2">Eliminar cancha</h2>
+            <p className="text-sm text-gray-500 mb-6">
+              ¿Estás seguro? Esta acción no se puede deshacer.
+            </p>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setPendingDelete(null)}
+                disabled={deletingCourt}
+                className="flex-1 px-4 py-2 text-sm rounded-lg border border-gray-200 text-gray-600
+                           hover:bg-gray-50 disabled:opacity-50 transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={confirmDelete}
+                disabled={deletingCourt}
+                className="flex-1 px-4 py-2 text-sm rounded-lg bg-red-500 text-white font-medium
+                           hover:bg-red-600 disabled:opacity-50 transition-colors"
+              >
+                {deletingCourt ? 'Eliminando…' : 'Eliminar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Rename Court Modal ── */}
+      {pendingRename && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6">
+            <h2 className="text-lg font-bold text-gray-800 mb-4">Renombrar cancha</h2>
+            <form onSubmit={confirmRename} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Nombre</label>
+                <input
+                  ref={renameInputRef}
+                  type="text"
+                  value={renameValue}
+                  onChange={(e) => setRenameValue(e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none
+                             focus:ring-2 focus:ring-indigo-400"
+                />
+                {renameError && <p className="text-xs text-red-600 mt-1">{renameError}</p>}
+              </div>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPendingRename(null)}
+                  disabled={renameSaving}
+                  className="flex-1 px-4 py-2 text-sm rounded-lg border border-gray-200 text-gray-600
+                             hover:bg-gray-50 disabled:opacity-50 transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={renameSaving}
+                  className="flex-1 px-4 py-2 text-sm rounded-lg bg-indigo-600 text-white font-medium
+                             hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+                >
+                  {renameSaving ? 'Guardando…' : 'Guardar'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+    </>
   );
 }

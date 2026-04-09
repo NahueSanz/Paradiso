@@ -1,11 +1,20 @@
-import type { Court, PaymentStatus, PlayStatus, Reservation } from './types';
+import type { Club, Court, PaymentStatus, PlayStatus, Reservation } from './types';
 
 const BASE = '/api';
 
+function authHeaders(): Record<string, string> {
+  const token = localStorage.getItem('pp_token');
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
-    headers: { 'Content-Type': 'application/json' },
     ...init,
+    headers: {
+      'Content-Type': 'application/json',
+      ...authHeaders(),
+      ...(init?.headers as Record<string, string> | undefined),
+    },
   });
 
   if (!res.ok) {
@@ -17,8 +26,33 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return res.json();
 }
 
-export function getCourts(): Promise<Court[]> {
-  return request('/courts');
+export function getClubs(): Promise<Club[]> {
+  return request('/clubs');
+}
+
+export function createClub(name: string): Promise<Club> {
+  return request('/clubs', { method: 'POST', body: JSON.stringify({ name }) });
+}
+
+export function getCourts(clubId?: number): Promise<Court[]> {
+  const q = clubId !== undefined ? `?clubId=${clubId}` : '';
+  return request(`/courts${q}`);
+}
+
+export function createCourt(data: { name: string; clubId: number }): Promise<Court> {
+  return request('/courts', { method: 'POST', body: JSON.stringify(data) });
+}
+
+export function deleteCourt(id: number): Promise<void> {
+  return request(`/courts/${id}`, { method: 'DELETE' });
+}
+
+export function updateCourt(id: number, data: { name: string }): Promise<Court> {
+  return request(`/courts/${id}`, { method: 'PATCH', body: JSON.stringify(data) });
+}
+
+export function updateClub(id: number, data: { name: string }): Promise<Club> {
+  return request(`/clubs/${id}`, { method: 'PATCH', body: JSON.stringify(data) });
 }
 
 export function getReservations(date: string): Promise<Reservation[]> {
@@ -72,8 +106,8 @@ export interface RevenueData {
   days: DayRevenue[];
 }
 
-export function getRevenue(from: string, to: string): Promise<RevenueData> {
-  return request(`/analytics/revenue?from=${from}&to=${to}`);
+export function getRevenue(from: string, to: string, clubId: number): Promise<RevenueData> {
+  return request(`/analytics/revenue?from=${from}&to=${to}&clubId=${clubId}`);
 }
 
 export interface ReservationReportRow {
@@ -89,6 +123,30 @@ export interface ReservationReportRow {
   depositAmount: number;
 }
 
-export function getReservationsReport(from: string, to: string): Promise<ReservationReportRow[]> {
-  return request(`/analytics/reservations?from=${from}&to=${to}`);
+export function getReservationsReport(from: string, to: string, clubId: number): Promise<ReservationReportRow[]> {
+  return request(`/analytics/reservations?from=${from}&to=${to}&clubId=${clubId}`);
+}
+
+// ── Invitations ───────────────────────────────────────────────────────────────
+
+export interface InvitationResponse {
+  token: string;
+}
+
+export function createInvitation(email: string, clubId: number): Promise<InvitationResponse> {
+  return request('/invitations', { method: 'POST', body: JSON.stringify({ email, clubId }) });
+}
+
+export interface AcceptInvitationPayload {
+  token: string;
+  password: string;
+}
+
+export interface AcceptInvitationResponse {
+  token: string;
+  user: import('./types').User;
+}
+
+export function acceptInvitation(data: AcceptInvitationPayload): Promise<AcceptInvitationResponse> {
+  return request('/invitations/accept', { method: 'POST', body: JSON.stringify(data) });
 }

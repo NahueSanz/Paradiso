@@ -1,27 +1,197 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import * as api from './api';
 import ScheduleGrid from './components/ScheduleGrid';
 import ReservationModal, { type FormData, type ModalState } from './components/ReservationModal';
+import ClubSelector, { CreateClubModal, NoClubsEmptyState } from './components/ClubSelector';
+import InviteModal from './components/InviteModal';
 import type { Court, Reservation, TimeSlot } from './types';
+import { useAuth } from './context/AuthContext';
+import { useClub } from './context/ClubContext';
 
 function todayISO(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+// ── Create Court Modal ────────────────────────────────────────────────────────
+
+interface CreateCourtModalProps {
+  onClose: () => void;
+  onCreated: (name: string) => Promise<void>;
+}
+
+function CreateCourtModal({ onClose, onCreated }: CreateCourtModalProps) {
+  const [name, setName]       = useState('');
+  const [saving, setSaving]   = useState(false);
+  const [error, setError]     = useState('');
+  const inputRef              = useRef<HTMLInputElement>(null);
+
+  useEffect(() => { inputRef.current?.focus(); }, []);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!name.trim()) { setError('El nombre es requerido.'); return; }
+    setSaving(true);
+    setError('');
+    try {
+      await onCreated(name.trim());
+      onClose();
+    } catch (err: any) {
+      setError(err.message ?? 'Error al crear la cancha.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6">
+        <h2 className="text-lg font-bold text-gray-800 mb-4">Agregar cancha</h2>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Nombre de la cancha
+            </label>
+            <input
+              ref={inputRef}
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Ej: Cancha 1"
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none
+                         focus:ring-2 focus:ring-indigo-400"
+            />
+            {error && <p className="text-xs text-red-600 mt-1">{error}</p>}
+          </div>
+
+          <div className="flex gap-2 pt-1">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 px-4 py-2 text-sm rounded-lg border border-gray-200 text-gray-600
+                         hover:bg-gray-50 transition-colors"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={saving}
+              className="flex-1 px-4 py-2 text-sm rounded-lg bg-indigo-600 text-white font-medium
+                         hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+            >
+              {saving ? 'Guardando…' : 'Crear cancha'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ── Rename Club Modal ─────────────────────────────────────────────────────────
+
+interface RenameClubModalProps {
+  currentName: string;
+  onClose: () => void;
+  onRenamed: (name: string) => Promise<void>;
+}
+
+function RenameClubModal({ currentName, onClose, onRenamed }: RenameClubModalProps) {
+  const [name, setName]     = useState(currentName);
+  const [saving, setSaving] = useState(false);
+  const [error, setError]   = useState('');
+  const inputRef            = useRef<HTMLInputElement>(null);
+
+  useEffect(() => { inputRef.current?.focus(); inputRef.current?.select(); }, []);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!name.trim()) { setError('El nombre es requerido.'); return; }
+    setSaving(true);
+    setError('');
+    try {
+      await onRenamed(name.trim());
+      onClose();
+    } catch (err: any) {
+      setError(err.message ?? 'Error al guardar.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6">
+        <h2 className="text-lg font-bold text-gray-800 mb-4">Editar nombre del club</h2>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Nombre</label>
+            <input
+              ref={inputRef}
+              type="text"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none
+                         focus:ring-2 focus:ring-indigo-400"
+            />
+            {error && <p className="text-xs text-red-600 mt-1">{error}</p>}
+          </div>
+          <div className="flex gap-2 pt-1">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 px-4 py-2 text-sm rounded-lg border border-gray-200 text-gray-600
+                         hover:bg-gray-50 transition-colors"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={saving}
+              className="flex-1 px-4 py-2 text-sm rounded-lg bg-indigo-600 text-white font-medium
+                         hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+            >
+              {saving ? 'Guardando…' : 'Guardar'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ── App ───────────────────────────────────────────────────────────────────────
+
 export default function App() {
   const navigate = useNavigate();
-  const [date, setDate]             = useState(todayISO());
-  const [courts, setCourts]         = useState<Court[]>([]);
-  const [courtError, setCourtError] = useState('');
-  const [refreshKey, setRefreshKey] = useState(0);
-  const [modal, setModal]           = useState<ModalState | null>(null);
+  const { user, logout } = useAuth();
+  const { clubs, selectedClubId, loadingClubs, refreshClubs } = useClub();
+  const isOwner = user?.role === 'owner';
+  const selectedClub = clubs.find((c) => c.id === selectedClubId);
 
+  const [date, setDate]                   = useState(todayISO());
+  const [courts, setCourts]               = useState<Court[]>([]);
+  const [courtError, setCourtError]       = useState('');
+  const [courtsRefreshKey, setCourtsKey]  = useState(0);
+  const [refreshKey, setRefreshKey]       = useState(0);
+  const [modal, setModal]                 = useState<ModalState | null>(null);
+  const [showCourtModal, setCourtModal]   = useState(false);
+  const [showCreateClubModal, setShowCreateClubModal]   = useState(false);
+  const [showInviteModal,    setShowInviteModal]        = useState(false);
+  const [showRenameClubModal, setShowRenameClubModal]   = useState(false);
+
+  // Fetch courts whenever selectedClubId or courtsRefreshKey changes
   useEffect(() => {
-    api.getCourts().then(setCourts).catch(() => setCourtError('Error al cargar las canchas.'));
-  }, []);
+    if (selectedClubId === null) { setCourts([]); return; }
+    setCourtError('');
+    api.getCourts(selectedClubId)
+      .then(setCourts)
+      .catch(() => setCourtError('Error al cargar las canchas.'));
+  }, [selectedClubId, courtsRefreshKey]);
 
   function refresh() { setRefreshKey((k) => k + 1); }
+  function refreshCourts() { setCourtsKey((k) => k + 1); }
 
   function openModal(courtId: number, slot: TimeSlot, reservation?: Reservation) {
     const courtName = courts.find((c) => c.id === courtId)?.name ?? '';
@@ -33,9 +203,9 @@ export default function App() {
       clientName: form.clientName,
       timeStart:  form.timeStart,
       timeEnd:    form.timeEnd,
-      ...(form.type          ? { type: form.type }                               : {}),
-      ...(form.totalPrice    ? { totalPrice: parseFloat(form.totalPrice) }       : {}),
-      ...(form.depositAmount ? { depositAmount: parseFloat(form.depositAmount) } : {}),
+      ...(form.type          ? { type: form.type }                   : {}),
+      ...(form.totalPrice    ? { totalPrice: form.totalPrice }        : {}),
+      ...(form.depositAmount ? { depositAmount: form.depositAmount }  : {}),
     };
 
     if (modal?.reservation) {
@@ -60,34 +230,128 @@ export default function App() {
     refresh();
   }
 
+  async function handleCreateCourt(name: string) {
+    if (!selectedClubId) return;
+    await api.createCourt({ name, clubId: selectedClubId });
+    refreshCourts();
+  }
+
+  async function handleDeleteCourt(id: number) {
+    await api.deleteCourt(id);
+    refreshCourts();
+  }
+
+  async function handleRenameCourt(id: number, name: string) {
+    await api.updateCourt(id, { name });
+    refreshCourts();
+  }
+
+  async function handleRenameClub(name: string) {
+    if (!selectedClubId) return;
+    await api.updateClub(selectedClubId, { name });
+    await refreshClubs();
+  }
+
   const legend = [
-    { label: 'Disponible',  className: 'bg-gray-200' },
-    { label: 'Pendiente',   className: 'bg-yellow-300' },
-    { label: 'Seña',        className: 'bg-amber-300' },
-    { label: 'Pagado',      className: 'bg-green-300' },
-    { label: 'Finalizado',  className: 'bg-gray-400' },
+    { label: 'Disponible', className: 'bg-slate-200' },
+    { label: 'Pendiente',  className: 'bg-amber-300' },
+    { label: 'Seña',       className: 'bg-orange-400' },
+    { label: 'Pagado',     className: 'bg-emerald-500' },
   ];
+
+  // Empty state for owners with no clubs
+  const showEmptyState = !loadingClubs && clubs.length === 0 && isOwner;
 
   return (
     <div className="min-h-screen flex flex-col">
       {/* Header */}
       <header className="bg-white border-b px-6 py-4 flex items-center justify-between gap-4">
-        <h1 className="text-xl font-bold text-indigo-700 tracking-tight">Padel Paradiso</h1>
+        <div className="flex items-center gap-3 min-w-0">
+          <h1 className="text-xl font-bold text-indigo-700 tracking-tight shrink-0">{selectedClub?.name ?? 'Sin club'}</h1>
+          {isOwner && selectedClub && (
+            <button
+              onClick={() => setShowRenameClubModal(true)}
+              title="Editar nombre del club"
+              className="p-1 rounded-lg text-gray-300 hover:text-indigo-500 hover:bg-indigo-50 transition-colors shrink-0"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                  d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+              </svg>
+            </button>
+          )}
+          {/* Club selector — always visible for owners, visible for employees when clubs exist */}
+          <ClubSelector />
+        </div>
 
-        <div className="flex items-center gap-4">
-          <button
-            onClick={() => navigate('/dashboard')}
-            className="flex items-center gap-1.5 text-sm font-medium text-gray-500 hover:text-indigo-600
-                       px-3 py-1.5 rounded-lg hover:bg-indigo-50 border border-transparent
-                       hover:border-indigo-200 transition-colors"
+        <div className="flex items-center gap-3 flex-wrap justify-end">
+          {/* Dashboard — solo para dueños */}
+          {isOwner && (
+            <button
+              onClick={() => navigate('/dashboard')}
+              className="flex items-center gap-1.5 text-sm font-medium text-gray-500 hover:text-indigo-600
+                         px-3 py-1.5 rounded-lg hover:bg-indigo-50 border border-transparent
+                         hover:border-indigo-200 transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                  d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+              </svg>
+              Ingresos
+            </button>
+          )}
+
+          {/* Agregar cancha — solo para dueños */}
+          {isOwner && (
+            <button
+              onClick={() => setCourtModal(true)}
+              className="flex items-center gap-1.5 text-sm font-medium text-white bg-indigo-600
+                         hover:bg-indigo-700 px-3 py-1.5 rounded-lg transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+              </svg>
+              Agregar cancha
+            </button>
+          )}
+
+          {/* Invitar empleado — solo para dueños */}
+          {isOwner && (
+            <button
+              onClick={() => setShowInviteModal(true)}
+              className="flex items-center gap-1.5 text-sm font-medium text-indigo-600
+                         hover:text-indigo-800 px-3 py-1.5 rounded-lg hover:bg-indigo-50
+                         border border-indigo-200 transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                  d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+              </svg>
+              Invitar empleado
+            </button>
+          )}
+
+          {/* Indicador de rol */}
+          <span
+            className={`text-xs px-2.5 py-1 rounded-full font-medium border
+              ${isOwner
+                ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                : 'bg-gray-100 text-gray-600 border-gray-200'
+              }`}
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-            </svg>
-            Dashboard
+            {isOwner ? 'Dueño' : 'Empleado'}
+          </span>
+
+          {/* Cerrar sesión */}
+          <button
+            onClick={logout}
+            className="text-xs px-2.5 py-1 rounded-full font-medium border border-gray-200
+                       text-gray-500 hover:bg-gray-100 transition-colors"
+          >
+            Salir
           </button>
-          {/* Legend */}
+
+          {/* Leyenda */}
           <div className="hidden sm:flex items-center gap-3 text-xs text-gray-600">
             {legend.map(({ label, className }) => (
               <span key={label} className="flex items-center gap-1">
@@ -97,7 +361,7 @@ export default function App() {
             ))}
           </div>
 
-          {/* Date picker */}
+          {/* Selector de fecha */}
           <input
             type="date"
             value={date}
@@ -107,23 +371,31 @@ export default function App() {
         </div>
       </header>
 
-      {/* Body */}
+      {/* Cuerpo */}
       <main className="flex-1 p-4 sm:p-6">
-        {courtError && (
-          <p className="mb-4 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-4 py-2">
-            {courtError}
-          </p>
+        {showEmptyState ? (
+          <NoClubsEmptyState onCreateClick={() => setShowCreateClubModal(true)} />
+        ) : (
+          <>
+            {courtError && (
+              <p className="mb-4 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-4 py-2">
+                {courtError}
+              </p>
+            )}
+            <ScheduleGrid
+              date={date}
+              courts={courts}
+              refreshKey={refreshKey}
+              isOwner={isOwner}
+              onCellClick={openModal}
+              onDeleteCourt={handleDeleteCourt}
+              onRenameCourt={handleRenameCourt}
+            />
+          </>
         )}
-
-        <ScheduleGrid
-          date={date}
-          courts={courts}
-          refreshKey={refreshKey}
-          onCellClick={openModal}
-        />
       </main>
 
-      {/* Modal */}
+      {/* Reservation Modal */}
       {modal && (
         <ReservationModal
           state={modal}
@@ -131,6 +403,36 @@ export default function App() {
           onSave={handleSave}
           onMarkPaid={handleMarkPaid}
           onDelete={handleDelete}
+        />
+      )}
+
+      {/* Create Court Modal */}
+      {showCourtModal && (
+        <CreateCourtModal
+          onClose={() => setCourtModal(false)}
+          onCreated={handleCreateCourt}
+        />
+      )}
+
+      {/* Create Club Modal (triggered from empty state) */}
+      {showCreateClubModal && (
+        <CreateClubModal
+          onClose={() => setShowCreateClubModal(false)}
+          onCreated={refreshClubs}
+        />
+      )}
+
+      {/* Invite Employee Modal */}
+      {showInviteModal && (
+        <InviteModal onClose={() => setShowInviteModal(false)} />
+      )}
+
+      {/* Rename Club Modal */}
+      {showRenameClubModal && selectedClub && (
+        <RenameClubModal
+          currentName={selectedClub.name}
+          onClose={() => setShowRenameClubModal(false)}
+          onRenamed={handleRenameClub}
         />
       )}
     </div>

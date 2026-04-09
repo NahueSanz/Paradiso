@@ -27,7 +27,7 @@ export async function getReservations(
       return;
     }
 
-    const reservations = await reservationService.getReservationsByDate(date);
+    const reservations = await reservationService.getReservationsByDate(date, req.user!.id);
     res.json(reservations);
   } catch (err) {
     next(err);
@@ -98,7 +98,7 @@ export async function createReservation(
       type,
       totalPrice,
       depositAmount,
-    });
+    }, req.user!.id);
 
     res.status(201).json(reservation);
   } catch (err) {
@@ -176,7 +176,7 @@ export async function updateReservation(
       status,
       type,
       paymentStatus,
-    });
+    }, req.user!.id);
 
     res.json(reservation);
   } catch (err) {
@@ -196,7 +196,7 @@ export async function deleteReservation(
       return;
     }
 
-    await reservationService.deleteReservation(id);
+    await reservationService.deleteReservation(id, req.user!.id);
     res.status(204).send();
   } catch (err) {
     next(err);

@@ -1,5 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
+import { useClub } from '../context/ClubContext';
+import ClubSelector from '../components/ClubSelector';
 import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, Legend, ResponsiveContainer,
@@ -272,6 +275,17 @@ function CustomTooltip({ active, payload, label }: any) {
 
 export default function Dashboard() {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const { clubs, selectedClubId } = useClub();
+
+  const currentClub = clubs.find((c) => c.id === selectedClubId) ?? null;
+
+  // Defensa en profundidad — el router ya bloquea, pero por si acaso
+  useEffect(() => {
+    if (user?.role !== 'owner') {
+      navigate('/', { replace: true });
+    }
+  }, [user, navigate]);
 
   const [from, setFrom] = useState(isoMinus(29));
   const [to,   setTo]   = useState(todayISO());
@@ -280,15 +294,17 @@ export default function Dashboard() {
   const [error, setError]         = useState('');
   const [exporting, setExporting] = useState(false);
 
+  const rangeInvalid = !!from && !!to && from > to;
+
   useEffect(() => {
-    if (!from || !to || from > to) return;
+    if (!from || !to || from > to || !selectedClubId) return;
     setLoading(true);
     setError('');
-    api.getRevenue(from, to)
+    api.getRevenue(from, to, selectedClubId)
       .then(setData)
       .catch((e) => setError(e.message ?? 'Error al cargar datos'))
       .finally(() => setLoading(false));
-  }, [from, to]);
+  }, [from, to, selectedClubId]);
 
   // ── derived stats ────────────────────────────────────────────────────────
 
@@ -320,9 +336,10 @@ export default function Dashboard() {
     : 0;
 
   async function handleExportPDF() {
+    if (!selectedClubId) return;
     setExporting(true);
     try {
-      const rows = await api.getReservationsReport(from, to);
+      const rows = await api.getReservationsReport(from, to, selectedClubId);
       await generatePDF(from, to, grandTotal, totalByType, rows);
     } catch (e: any) {
       setError(e.message ?? 'Error al generar el PDF');
@@ -348,27 +365,44 @@ export default function Dashboard() {
             </svg>
           </button>
           <div>
-            <h1 className="text-xl font-bold text-indigo-700 tracking-tight">Padel Paradiso</h1>
-            <p className="text-xs text-gray-400">Dashboard de ingresos</p>
+            <h1 className="text-xl font-bold text-indigo-700 tracking-tight">
+              {currentClub ? currentClub.name : 'Ingresos'}
+            </h1>
+            <p className="text-xs text-gray-400">Reporte de ingresos</p>
           </div>
         </div>
 
-        {/* date range */}
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1.5 bg-gray-50 border border-gray-200 rounded-xl px-3 py-1.5">
-            <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        {/* club selector + date range */}
+        <div className="flex items-center gap-3">
+          <ClubSelector />
+          <div className={`flex items-center gap-2 border rounded-xl px-3 py-1.5 transition-colors ${
+            rangeInvalid ? 'border-red-300 bg-red-50' : 'border-gray-200 bg-gray-50'
+          }`}>
+            <svg className="w-4 h-4 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                 d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
             </svg>
-            <input
-              type="date" value={from} onChange={(e) => setFrom(e.target.value)}
-              className="bg-transparent text-sm focus:outline-none w-32"
-            />
+            <div className="flex flex-col">
+              <label className="text-[10px] font-medium uppercase tracking-wide leading-none mb-0.5 text-gray-400">
+                Desde
+              </label>
+              <input
+                type="date" value={from} max={to || undefined}
+                onChange={(e) => setFrom(e.target.value)}
+                className={`bg-transparent text-sm focus:outline-none w-32 ${rangeInvalid ? 'text-red-600' : ''}`}
+              />
+            </div>
             <span className="text-gray-300">→</span>
-            <input
-              type="date" value={to} onChange={(e) => setTo(e.target.value)}
-              className="bg-transparent text-sm focus:outline-none w-32"
-            />
+            <div className="flex flex-col">
+              <label className="text-[10px] font-medium uppercase tracking-wide leading-none mb-0.5 text-gray-400">
+                Hasta
+              </label>
+              <input
+                type="date" value={to} min={from || undefined}
+                onChange={(e) => setTo(e.target.value)}
+                className="bg-transparent text-sm focus:outline-none w-32"
+              />
+            </div>
           </div>
 
           {/* quick ranges */}
@@ -392,7 +426,7 @@ export default function Dashboard() {
           {/* export button */}
           <button
             onClick={handleExportPDF}
-            disabled={exporting || loading || !data}
+            disabled={exporting || loading || !data || rangeInvalid}
             className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border font-medium transition-colors
                        disabled:opacity-50 disabled:cursor-not-allowed
                        border-gray-300 text-gray-600 bg-white hover:border-gray-400 hover:bg-gray-50"
@@ -420,13 +454,27 @@ export default function Dashboard() {
 
       <main className="p-6 max-w-7xl mx-auto space-y-6">
 
-        {/* ── error ── */}
-        {error && (
+        {/* ── no club selected ── */}
+        {!selectedClubId && (
+          <div className="flex flex-col items-center justify-center py-24 text-center gap-3">
+            <p className="text-lg font-semibold text-gray-700">Seleccioná un club para ver los ingresos</p>
+            <p className="text-sm text-gray-400">Usá el selector de club en la barra superior.</p>
+          </div>
+        )}
+
+        {/* ── errors ── */}
+        {rangeInvalid && (
+          <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-3 text-sm">
+            La fecha &quot;Desde&quot; no puede ser mayor que &quot;Hasta&quot;
+          </div>
+        )}
+        {error && !rangeInvalid && (
           <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-3 text-sm">
             {error}
           </div>
         )}
 
+        {selectedClubId && (<>
         {/* ── KPI row ── */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {/* grand total */}
@@ -622,6 +670,7 @@ export default function Dashboard() {
           </div>
         </div>
 
+        </>)}
       </main>
     </div>
   );
