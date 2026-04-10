@@ -3,7 +3,7 @@ import * as clubService from '../services/clubService';
 
 export async function getClubs(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const clubs = await clubService.getMyClubs(req.user!.id);
+    const clubs = await clubService.getMyClubs(req.user.id);
     res.json(clubs);
   } catch (err) {
     next(err);
@@ -24,7 +24,7 @@ export async function updateClub(req: Request, res: Response, next: NextFunction
       return;
     }
 
-    const club = await clubService.updateClub(id, name.trim(), req.user!.id);
+    const club = await clubService.updateClub(id, name.trim(), req.user.id);
     res.json(club);
   } catch (err) {
     next(err);
@@ -40,7 +40,7 @@ export async function createClub(req: Request, res: Response, next: NextFunction
       return;
     }
 
-    const club = await clubService.createClub({ name: name.trim(), ownerId: req.user!.id });
+    const club = await clubService.createClub({ name: name.trim(), ownerId: req.user.id });
     res.status(201).json(club);
   } catch (err) {
     next(err);

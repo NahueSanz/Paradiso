@@ -23,7 +23,7 @@ export async function createInvitation(req: Request, res: Response, next: NextFu
 
     // Club must belong to the authenticated owner
     const club = await prisma.club.findFirst({
-      where: { id: Number(clubId), ownerId: req.user!.id },
+      where: { id: Number(clubId), ownerId: req.user.id },
     });
 
     if (!club) {
@@ -70,7 +70,7 @@ export async function inviteToClub(req: Request, res: Response, next: NextFuncti
     }
 
     const club = await prisma.club.findFirst({
-      where: { id: clubId, ownerId: req.user!.id },
+      where: { id: clubId, ownerId: req.user.id },
     });
 
     if (!club) {

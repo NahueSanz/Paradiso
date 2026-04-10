@@ -11,21 +11,21 @@ export async function getMembership(req: Request, res: Response, next: NextFunct
     }
 
     let membership = await prisma.membership.findUnique({
-      where: { userId_clubId: { userId: req.user!.id, clubId } },
+      where: { userId_clubId: { userId: req.user.id, clubId } },
       select: { id: true, clubId: true, role: true, displayName: true },
     });
 
     // Auto-create membership for owners who don't have one yet (legacy accounts)
     if (!membership) {
       const club = await prisma.club.findFirst({
-        where: { id: clubId, ownerId: req.user!.id },
+        where: { id: clubId, ownerId: req.user.id },
         include: { owner: { select: { name: true } } },
       });
 
       if (club) {
         membership = await prisma.membership.create({
           data: {
-            userId: req.user!.id,
+            userId: req.user.id,
             clubId,
             role: 'owner',
             displayName: club.owner.name,
@@ -66,8 +66,8 @@ export async function updateMembership(req: Request, res: Response, next: NextFu
       throw new AppError('Membership not found', 404);
     }
 
-    const isOwnMembership = membership.userId === req.user!.id;
-    const isOwnerRole = req.user!.role === 'owner';
+    const isOwnMembership = membership.userId === req.user.id;
+    const isOwnerRole = req.user.role === 'owner';
 
     if (!isOwnMembership && !isOwnerRole) {
       throw new AppError('Forbidden', 403);
@@ -76,7 +76,7 @@ export async function updateMembership(req: Request, res: Response, next: NextFu
     // Owner can only edit memberships in clubs they own
     if (!isOwnMembership && isOwnerRole) {
       const club = await prisma.club.findFirst({
-        where: { id: membership.clubId, ownerId: req.user!.id },
+        where: { id: membership.clubId, ownerId: req.user.id },
       });
       if (!club) throw new AppError('Forbidden', 403);
     }

@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
+import { createContext, useContext, useState, type ReactNode } from 'react';
 import type { User } from '../types';
 import { API_URL } from '../api';
 
@@ -38,34 +38,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return raw ? (JSON.parse(raw) as User) : null;
   });
 
-  // Keep localStorage in sync whenever token/user changes
-  useEffect(() => {
-    if (token) localStorage.setItem(TOKEN_KEY, token);
-    else        localStorage.removeItem(TOKEN_KEY);
-  }, [token]);
-
-  useEffect(() => {
-    if (user) localStorage.setItem(USER_KEY, JSON.stringify(user));
-    else      localStorage.removeItem(USER_KEY);
-  }, [user]);
-
   function setUser(u: User | null) {
     setUserState(u);
   }
 
   async function login(email: string, password: string) {
     const { token: t, user: u } = await authRequest('/auth/login', { email, password });
+    // Write to localStorage synchronously so api.ts can read it immediately
+    // on the next page before React's state update cycle completes.
+    localStorage.setItem(TOKEN_KEY, t);
+    localStorage.setItem(USER_KEY, JSON.stringify(u));
     setToken(t);
     setUserState(u);
   }
 
   async function register(email: string, password: string, role: 'owner' | 'employee') {
     const { token: t, user: u } = await authRequest('/auth/register', { email, password, role });
+    localStorage.setItem(TOKEN_KEY, t);
+    localStorage.setItem(USER_KEY, JSON.stringify(u));
     setToken(t);
     setUserState(u);
   }
 
   function logout() {
+    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(USER_KEY);
     setToken(null);
     setUserState(null);
   }

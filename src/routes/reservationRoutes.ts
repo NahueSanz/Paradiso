@@ -6,14 +6,15 @@ import {
   updateReservation,
 } from '../controllers/reservationController';
 import { resolveMembership } from '../middlewares/resolveMembership';
+import { asyncHandler } from '../utils/asyncHandler';
 
 const router = Router();
 
 router.use(resolveMembership);
 
-router.get('/', getReservations);
-router.post('/', createReservation);
-router.put('/:id', updateReservation);
-router.delete('/:id', deleteReservation);
+router.get('/', asyncHandler(getReservations));
+router.post('/', asyncHandler(createReservation));
+router.put('/:id', asyncHandler(updateReservation));
+router.delete('/:id', asyncHandler(deleteReservation));
 
 export default router;

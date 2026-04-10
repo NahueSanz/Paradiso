@@ -9,6 +9,19 @@ interface JwtPayload {
   role: Role;
 }
 
+function extractPayload(authHeader: string | undefined): JwtPayload | null {
+  if (!authHeader?.startsWith('Bearer ')) return null;
+  try {
+    return jwt.verify(authHeader.slice(7), JWT_SECRET) as JwtPayload;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Requires a valid JWT. Returns 401 if the token is missing or invalid.
+ * Use this for endpoints that must be authenticated.
+ */
 export function authenticate(req: Request, res: Response, next: NextFunction): void {
   const authHeader = req.headers.authorization;
   if (!authHeader?.startsWith('Bearer ')) {
@@ -16,12 +29,13 @@ export function authenticate(req: Request, res: Response, next: NextFunction): v
     return;
   }
 
-  const token = authHeader.slice(7);
-  try {
-    const payload = jwt.verify(token, JWT_SECRET) as JwtPayload;
-    req.user = { id: payload.id, role: payload.role };
-    next();
-  } catch {
+  const payload = extractPayload(authHeader);
+  if (!payload) {
     res.status(401).json({ status: 'error', message: 'Invalid or expired token' });
+    return;
   }
+
+  req.user = { id: payload.id, role: payload.role };
+  next();
 }
+

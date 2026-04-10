@@ -14,7 +14,16 @@
     "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
-    "noFallthroughCasesInSwitch": true
+    "noFallthroughCasesInSwitch": true,
+
+    // 👇 necesario para shadcn (aunque esté deprecado)
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"]
+    },
+
+    // 👇 opcional: evita el warning molesto
+    "ignoreDeprecations": "6.0"
   },
   "include": ["src"]
 }

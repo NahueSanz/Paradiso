@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import * as api from './api';
 import ScheduleGrid from './components/ScheduleGrid';
 import ReservationModal, { type FormData, type ModalState } from './components/ReservationModal';
-import ClubSelector, { CreateClubModal, NoClubsEmptyState } from './components/ClubSelector';
+import { CreateClubModal, NoClubsEmptyState } from './components/ClubSelector';
 import InviteModal from './components/InviteModal';
+import Header from './components/Header';
 import type { Court, Reservation, TimeSlot } from './types';
 import { useAuth } from './context/AuthContext';
 import { useClub } from './context/ClubContext';
@@ -241,15 +241,11 @@ function ProfileModal({ currentDisplayName, onClose, onSave }: ProfileModalProps
 // ── App ───────────────────────────────────────────────────────────────────────
 
 export default function App() {
-  const navigate = useNavigate();
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const { clubs, selectedClubId, loadingClubs, refreshClubs } = useClub();
   const { currentMembership, updateDisplayName } = useMembership();
   const isOwner = user?.role === 'owner';
   const selectedClub = clubs.find((c) => c.id === selectedClubId);
-
-  const displayName = currentMembership?.displayName ?? user?.name ?? '';
-  const roleLabel   = isOwner ? 'Dueño' : 'Empleado';
 
   const [date, setDate]                   = useState(todayISO());
   const [courts, setCourts]               = useState<Court[]>([]);
@@ -347,43 +343,15 @@ export default function App() {
   return (
     <div className="min-h-screen flex flex-col">
       {/* Header */}
-      <header className="bg-white border-b px-6 py-4 flex items-center justify-between gap-4">
-        <div className="flex items-center gap-3 min-w-0">
-          <h1 className="text-xl font-bold text-indigo-700 tracking-tight shrink-0">{selectedClub?.name ?? 'Sin club'}</h1>
-          {isOwner && selectedClub && (
-            <button
-              onClick={() => setShowRenameClubModal(true)}
-              title="Editar nombre del club"
-              className="p-1 rounded-lg text-gray-300 hover:text-indigo-500 hover:bg-indigo-50 transition-colors shrink-0"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                  d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-              </svg>
-            </button>
-          )}
-          {/* Club selector — solo para dueños */}
-          {isOwner && <ClubSelector />}
-        </div>
+      <Header
+        onRenameClub={() => setShowRenameClubModal(true)}
+        onShowProfile={() => setShowProfileModal(true)}
+      />
 
-        <div className="flex items-center gap-3 flex-wrap justify-end">
-          {/* Dashboard — solo para dueños */}
-          {isOwner && (
-            <button
-              onClick={() => navigate('/dashboard')}
-              className="flex items-center gap-1.5 text-sm font-medium text-gray-500 hover:text-indigo-600
-                         px-3 py-1.5 rounded-lg hover:bg-indigo-50 border border-transparent
-                         hover:border-indigo-200 transition-colors"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                  d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-              </svg>
-              Ingresos
-            </button>
-          )}
-
-          {/* Agregar cancha — solo para dueños */}
+      {/* Page toolbar */}
+      <div className="bg-white border-b px-4 sm:px-6 py-2 flex items-center justify-between gap-3 flex-wrap">
+        {/* Owner actions */}
+        <div className="flex items-center gap-2 flex-wrap">
           {isOwner && (
             <button
               onClick={() => setCourtModal(true)}
@@ -396,8 +364,6 @@ export default function App() {
               Agregar cancha
             </button>
           )}
-
-          {/* Invitar empleado — solo para dueños */}
           {isOwner && (
             <button
               onClick={() => setShowInviteModal(true)}
@@ -412,43 +378,10 @@ export default function App() {
               Invitar empleado
             </button>
           )}
+        </div>
 
-          {/* Nombre + rol (clickable → perfil) */}
-          {currentMembership && (
-            <button
-              onClick={() => setShowProfileModal(true)}
-              title="Editar perfil"
-              className={`text-xs px-2.5 py-1 rounded-full font-medium border transition-colors
-                ${isOwner
-                  ? 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100'
-                  : 'bg-gray-100 text-gray-600 border-gray-200 hover:bg-gray-200'
-                }`}
-            >
-              {displayName} <span className="opacity-60">({roleLabel})</span>
-            </button>
-          )}
-          {!currentMembership && (
-            <span
-              className={`text-xs px-2.5 py-1 rounded-full font-medium border
-                ${isOwner
-                  ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
-                  : 'bg-gray-100 text-gray-600 border-gray-200'
-                }`}
-            >
-              {displayName} <span className="opacity-60">({roleLabel})</span>
-            </span>
-          )}
-
-          {/* Cerrar sesión */}
-          <button
-            onClick={logout}
-            className="text-xs px-2.5 py-1 rounded-full font-medium border border-gray-200
-                       text-gray-500 hover:bg-gray-100 transition-colors"
-          >
-            Salir
-          </button>
-
-          {/* Leyenda */}
+        {/* Legend + date picker */}
+        <div className="flex items-center gap-4 ml-auto flex-wrap">
           <div className="hidden sm:flex items-center gap-3 text-xs text-gray-600">
             {legend.map(({ label, className }) => (
               <span key={label} className="flex items-center gap-1">
@@ -457,8 +390,6 @@ export default function App() {
               </span>
             ))}
           </div>
-
-          {/* Selector de fecha */}
           <input
             type="date"
             value={date}
@@ -466,7 +397,7 @@ export default function App() {
             className="border rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
           />
         </div>
-      </header>
+      </div>
 
       {/* Cuerpo */}
       <main className="flex-1 p-4 sm:p-6">

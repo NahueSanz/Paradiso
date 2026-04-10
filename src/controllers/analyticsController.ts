@@ -27,7 +27,7 @@ export async function revenueHandler(req: Request, res: Response, next: NextFunc
     }
     const clubId = parseClubId(rawClubId);
 
-    const data = await getRevenue(from, to, clubId, req.user!.id);
+    const data = await getRevenue(from, to, clubId, req.user.id);
     res.json(data);
   } catch (err) {
     next(err);
@@ -49,7 +49,7 @@ export async function reservationsReportHandler(req: Request, res: Response, nex
     }
     const clubId = parseClubId(rawClubId);
 
-    const rows = await getReservationsReport(from, to, clubId, req.user!.id);
+    const rows = await getReservationsReport(from, to, clubId, req.user.id);
     res.json(rows);
   } catch (err) {
     next(err);

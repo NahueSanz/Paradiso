@@ -8,7 +8,7 @@ import prisma from '../lib/prisma';
  */
 export async function resolveMembership(req: Request, _res: Response, next: NextFunction): Promise<void> {
   const clubIdHeader = req.headers['x-club-id'];
-  if (!req.user || !clubIdHeader) {
+  if (!clubIdHeader) {
     next();
     return;
   }
