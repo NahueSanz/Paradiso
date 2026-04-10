@@ -12,10 +12,15 @@ app.use(cors({
   ],
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'x-club-id',"*"],
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-club-id'],
 }));
 
 app.options('*', cors());
+
+app.use((req, res, next) => {
+  console.log('CORS CHECK:', req.method, req.path);
+  next();
+});
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
