@@ -17,14 +17,14 @@ process.on("unhandledRejection", (reason) => {
 
 const app = express();
 
-/*const corsOptions = {
+const corsOptions = {
   origin: ["http://localhost:5173", "https://paradiso-nine.vercel.app"],
   credentials: true,
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization", "X-Club-Id"],
-};*/
+};
 
-app.use(cors());
+app.use(cors(corsOptions));
 //app.options("*", cors(corsOptions));
 
 app.use((req, _res, next) => {
