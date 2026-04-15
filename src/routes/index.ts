@@ -7,6 +7,9 @@ import reservationRoutes from "./reservationRoutes";
 import analyticsRoutes from "./analyticsRoutes";
 import invitationRoutes from "./invitationRoutes";
 import membershipRoutes from "./membershipRoutes";
+import fixedReservationRoutes from "./fixedReservationRoutes";
+import scheduleRoutes from "./scheduleRoutes";
+import cashRoutes from "./cashRoutes";
 import { authenticate } from "../middlewares/authenticate";
 import { acceptInvitation } from "../controllers/invitationController";
 
@@ -25,5 +28,8 @@ router.use("/reservations", reservationRoutes);
 router.use("/analytics", analyticsRoutes);
 router.use("/invitations", invitationRoutes);
 router.use("/membership", membershipRoutes);
+router.use("/fixed-reservations", fixedReservationRoutes);
+router.use("/schedule", scheduleRoutes);
+router.use("/cash", cashRoutes);
 
 export default router;

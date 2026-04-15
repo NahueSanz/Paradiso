@@ -25,20 +25,9 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
-//app.options("*", cors(corsOptions));
-
-app.use((req, _res, next) => {
-  console.log("➡️", req.method, req.path);
-  next();
-});
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-
-app.use((req, _res, next) => {
-  console.log("REQ:", req.method, req.path);
-  next();
-});
 
 app.use("/api", router);
 

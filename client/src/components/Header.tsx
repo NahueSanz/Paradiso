@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Menu, LogOut, BarChart2, Pencil } from 'lucide-react';
+import { Menu, LogOut, BarChart2, Pencil, Wallet } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Sheet,
@@ -77,6 +77,17 @@ export default function Header({ onRenameClub, onShowProfile }: HeaderProps) {
             >
               <BarChart2 className="w-4 h-4" />
               Ingresos
+            </Button>
+          )}
+          {isOwner && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => navigate('/cash')}
+              className="text-gray-500 hover:text-indigo-600 gap-1.5"
+            >
+              <Wallet className="w-4 h-4" />
+              Caja
             </Button>
           )}
 
@@ -157,6 +168,17 @@ export default function Header({ onRenameClub, onShowProfile }: HeaderProps) {
                     >
                       <BarChart2 className="w-4 h-4 shrink-0" />
                       Ingresos
+                    </button>
+                  </SheetClose>
+                )}
+                {isOwner && (
+                  <SheetClose asChild>
+                    <button
+                      onClick={() => navigate('/cash')}
+                      className="flex items-center gap-3 text-sm font-medium text-gray-700 hover:text-indigo-600 hover:bg-indigo-50 px-3 py-2.5 rounded-lg transition-colors text-left"
+                    >
+                      <Wallet className="w-4 h-4 shrink-0" />
+                      Caja
                     </button>
                   </SheetClose>
                 )}

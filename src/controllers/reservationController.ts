@@ -124,12 +124,16 @@ export async function updateReservation(
     // Normalize numeric fields: "" | null | undefined → undefined, else parse to number
     const rawTotal = req.body.totalPrice;
     const rawDeposit = req.body.depositAmount;
+    const rawPaid = req.body.paidAmount;
     const totalPrice = rawTotal === '' || rawTotal === undefined || rawTotal === null
       ? undefined
       : Number(rawTotal);
     const depositAmount = rawDeposit === '' || rawDeposit === undefined || rawDeposit === null
       ? undefined
       : Number(rawDeposit);
+    const paidAmount = rawPaid === '' || rawPaid === undefined || rawPaid === null
+      ? undefined
+      : Number(rawPaid);
 
     const errors: string[] = [];
 
@@ -154,6 +158,9 @@ export async function updateReservation(
     if (depositAmount !== undefined && (isNaN(depositAmount) || depositAmount < 0)) {
       errors.push('depositAmount must be a non-negative number');
     }
+    if (paidAmount !== undefined && (isNaN(paidAmount) || paidAmount < 0)) {
+      errors.push('paidAmount must be a non-negative number');
+    }
     if (status !== undefined && !VALID_STATUSES.includes(status)) {
       errors.push(`status must be one of: ${VALID_STATUSES.join(', ')}`);
     }
@@ -174,6 +181,7 @@ export async function updateReservation(
       clientPhone,
       totalPrice,
       depositAmount,
+      paidAmount,
       status,
       type,
       paymentStatus,

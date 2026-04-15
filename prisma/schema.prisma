@@ -52,16 +52,17 @@ enum PlayStatus {
 }
 
 model Club {
-  id          Int          @id @default(autoincrement())
-  name        String
-  ownerId     Int
-  owner       User         @relation(fields: [ownerId], references: [id])
-  employees   User[]       @relation("EmployeeClub")
-  courts      Court[]
-  invitations Invitation[]
-  memberships Membership[]
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+  id             Int             @id @default(autoincrement())
+  name           String
+  ownerId        Int
+  owner          User            @relation(fields: [ownerId], references: [id])
+  employees      User[]          @relation("EmployeeClub")
+  courts         Court[]
+  invitations    Invitation[]
+  memberships    Membership[]
+  cashMovements  CashMovement[]
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
 }
 
 model Invitation {
@@ -93,13 +94,45 @@ model Membership {
 }
 
 model Court {
-  id           Int           @id @default(autoincrement())
-  name         String
-  clubId       Int
-  club         Club          @relation(fields: [clubId], references: [id])
-  reservations Reservation[]
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
+  id                Int                @id @default(autoincrement())
+  name              String
+  clubId            Int
+  club              Club               @relation(fields: [clubId], references: [id])
+  reservations      Reservation[]
+  fixedReservations FixedReservation[]
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+}
+
+model FixedReservation {
+  id            Int      @id @default(autoincrement())
+  courtId       Int
+  court         Court    @relation(fields: [courtId], references: [id])
+  dayOfWeek     Int      // 0-6 (Sunday-Saturday)
+  timeStart     String   // "HH:MM"
+  duration      Int      // minutes
+  clientName    String
+  type          String
+  totalPrice    Decimal? @db.Decimal(10, 2)
+  depositAmount Decimal? @db.Decimal(10, 2)
+  carryOver     Decimal   @default(0) @db.Decimal(10, 2)
+  lastPaidAt    DateTime?
+  active        Boolean   @default(true)
+
+  createdAt     DateTime  @default(now())
+}
+
+model CashMovement {
+  id                   Int      @id @default(autoincrement())
+  clubId               Int
+  club                 Club     @relation(fields: [clubId], references: [id])
+  type                 String   // "income" | "expense"
+  concept              String
+  amount               Decimal  @db.Decimal(10, 2)
+  paymentMethod        String
+  relatedReservationId Int?
+  fixedReservationId   Int?
+  createdAt            DateTime @default(now())
 }
 
 model Reservation {
@@ -115,6 +148,7 @@ model Reservation {
   status                ReservationStatus @default(pending)
   totalPrice            Decimal?          @db.Decimal(10, 2)
   depositAmount         Decimal?          @db.Decimal(10, 2)
+  paidAmount            Decimal?          @db.Decimal(10, 2)
   paymentStatus         PaymentStatus     @default(pending)
   playStatus            PlayStatus        @default(scheduled)
   createdByMembershipId Int?

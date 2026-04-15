@@ -63,12 +63,21 @@ function derivePaymentStatus(totalPrice: number | undefined, depositAmount: numb
   return PaymentStatus.partial;
 }
 
-function withRemainingAmount<T extends { totalPrice: Prisma.Decimal | null; depositAmount: Prisma.Decimal | null }>(
+function withRemainingAmount<T extends { totalPrice: Prisma.Decimal | null; depositAmount: Prisma.Decimal | null; paidAmount: Prisma.Decimal | null }>(
   r: T,
 ): T & { remainingAmount: number | null } {
   const total = r.totalPrice != null ? Number(r.totalPrice) : null;
+  if (total === null) return { ...r, remainingAmount: null };
+
+  if (r.paidAmount != null) {
+    // Use paidAmount when available — the authoritative "money received" field
+    const remainingAmount = Math.max(0, total - Number(r.paidAmount));
+    return { ...r, remainingAmount };
+  }
+
+  // Fallback for older records without paidAmount
   const deposit = r.depositAmount != null ? Number(r.depositAmount) : null;
-  const remainingAmount = total !== null && deposit !== null ? Math.max(0, total - deposit) : null;
+  const remainingAmount = deposit !== null ? Math.max(0, total - deposit) : null;
   return { ...r, remainingAmount };
 }
 
@@ -191,6 +200,7 @@ export interface UpdateReservationInput {
   clientPhone?: string;
   totalPrice?: number | null;
   depositAmount?: number | null;
+  paidAmount?: number | null;
   status?: ReservationStatus;
   type?: ReservationType;
   paymentStatus?: PaymentStatus;
@@ -227,20 +237,20 @@ export async function updateReservation(id: number, input: UpdateReservationInpu
     await assertNoOverlap(existing.courtId, parsedDate, parsedStart, parsedEnd, id);
   }
 
-  // When marking as paid, auto-set depositAmount = totalPrice if not explicitly provided
   const newTotalPrice =
     input.totalPrice !== undefined ? (input.totalPrice ?? undefined) : toNumber(existing.totalPrice);
 
-  let resolvedDepositAmount = input.depositAmount;
-  if (input.paymentStatus === PaymentStatus.paid && resolvedDepositAmount === undefined) {
-    resolvedDepositAmount = newTotalPrice !== undefined ? newTotalPrice : null;
-  }
-
   const effectiveDeposit =
-    resolvedDepositAmount !== undefined ? (resolvedDepositAmount ?? undefined) : toNumber(existing.depositAmount);
+    input.depositAmount !== undefined ? (input.depositAmount ?? undefined) : toNumber(existing.depositAmount);
 
   if (newTotalPrice !== undefined && effectiveDeposit !== undefined && effectiveDeposit > newTotalPrice) {
     throw new AppError('depositAmount cannot exceed totalPrice', 400);
+  }
+
+  // When marking as paid, auto-set paidAmount = totalPrice if caller didn't provide it explicitly
+  let resolvedPaidAmount = input.paidAmount;
+  if (input.paymentStatus === PaymentStatus.paid && resolvedPaidAmount === undefined) {
+    resolvedPaidAmount = newTotalPrice !== undefined ? newTotalPrice : null;
   }
 
   // Build update payload dynamically — only include fields that were explicitly provided.
@@ -248,7 +258,7 @@ export async function updateReservation(id: number, input: UpdateReservationInpu
   const data: Partial<{
     date: Date; timeStart: Date; timeEnd: Date;
     clientName: string; clientPhone: string | null;
-    totalPrice: number | null; depositAmount: number | null;
+    totalPrice: number | null; depositAmount: number | null; paidAmount: number | null;
     status: ReservationStatus; type: ReservationType;
     paymentStatus: PaymentStatus; playStatus: PlayStatus;
     updatedByMembershipId: number | null;
@@ -261,7 +271,8 @@ export async function updateReservation(id: number, input: UpdateReservationInpu
   if (input.clientPhone !== undefined) data.clientPhone = input.clientPhone;
 
   if (input.totalPrice !== undefined) data.totalPrice = input.totalPrice;
-  if (resolvedDepositAmount !== undefined) data.depositAmount = resolvedDepositAmount;
+  if (input.depositAmount !== undefined) data.depositAmount = input.depositAmount;
+  if (resolvedPaidAmount !== undefined) data.paidAmount = resolvedPaidAmount;
 
   if (input.status !== undefined) data.status = input.status;
   if (input.type !== undefined) data.type = input.type;

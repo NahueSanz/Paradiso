@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import App from './App';
 import Dashboard from './pages/Dashboard';
+import CashPage from './pages/CashPage';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import InvitePage from './pages/InvitePage';
@@ -54,6 +55,16 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
               <RequireAuth>
                 <OwnerOnly>
                   <Dashboard />
+                </OwnerOnly>
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/cash"
+            element={
+              <RequireAuth>
+                <OwnerOnly>
+                  <CashPage />
                 </OwnerOnly>
               </RequireAuth>
             }

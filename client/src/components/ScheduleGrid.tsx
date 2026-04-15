@@ -1,6 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
-import { getReservations } from '../api';
-import type { Court, Reservation, TimeSlot } from '../types';
+import { getSchedule } from '../api';
+import type {
+  Court,
+  Reservation,
+  ScheduleEntry,
+  TimeSlot,
+  VirtualFixedReservation,
+} from '../types';
+import type { ScheduleFixedReservation } from '../api';
 
 // Club hours: 09:00 → 01:00 (next day) — 32 half-hour slots
 // Post-midnight hours (00:xx, 01:xx) are treated as virtual minutes > 1440
@@ -19,11 +26,15 @@ const SLOTS: TimeSlot[] = Array.from({ length: NUM_SLOTS }, (_, i) => {
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
-/** Convert ISO datetime string to virtual minutes (post-midnight hours get +1440). */
-function toVirtualMinutes(iso: string): number {
-  const h   = parseInt(iso.slice(11, 13), 10);
-  const m   = parseInt(iso.slice(14, 16), 10);
-  const raw = h * 60 + m;
+/**
+ * Parses both ISO datetime strings ("1970-01-01T09:00:00.000Z")
+ * and plain "HH:MM" strings into virtual minutes.
+ */
+function toVirtualMinutes(timeStr: string): number {
+  const isISO = timeStr.length > 5;
+  const h     = parseInt(isISO ? timeStr.slice(11, 13) : timeStr.slice(0, 2), 10);
+  const m     = parseInt(isISO ? timeStr.slice(14, 16) : timeStr.slice(3, 5), 10);
+  const raw   = h * 60 + m;
   return raw < OPEN_VIRTUAL ? raw + 24 * 60 : raw;
 }
 
@@ -34,7 +45,16 @@ function slotToVirtualMinutes(slot: TimeSlot): number {
   return raw < OPEN_VIRTUAL ? raw + 24 * 60 : raw;
 }
 
-function coversSlot(r: Reservation, slot: TimeSlot): boolean {
+/**
+ * Returns "HH:MM" from either ISO datetime or plain "HH:MM".
+ */
+function toHHMM(timeStr: string): string {
+  return timeStr.length > 5 ? timeStr.slice(11, 16) : timeStr.slice(0, 5);
+}
+
+type HasTimes = { timeStart: string; timeEnd: string };
+
+function coversSlot(r: HasTimes, slot: TimeSlot): boolean {
   const slotStart = slotToVirtualMinutes(slot);
   const slotEnd   = slotStart + 30;
   const startMin  = toVirtualMinutes(r.timeStart);
@@ -42,49 +62,78 @@ function coversSlot(r: Reservation, slot: TimeSlot): boolean {
   return startMin < slotEnd && endMin > slotStart;
 }
 
-/** Verdadero solo para la primera franja que ocupa la reserva. */
-function isFirstCoveredSlot(r: Reservation, slot: TimeSlot): boolean {
+/** True only for the first half-hour slot covered by the entry. */
+function isFirstCoveredSlot(r: HasTimes, slot: TimeSlot): boolean {
   const slotStart = slotToVirtualMinutes(slot);
   const startMin  = toVirtualMinutes(r.timeStart);
   return startMin >= slotStart && startMin < slotStart + 30;
 }
 
-/** Cantidad de filas de 30 min que ocupa la reserva. */
-function getRowSpan(r: Reservation): number {
+/** Number of 30-min rows the entry spans. */
+function getRowSpan(r: HasTimes): number {
   return SLOTS.filter((s) => coversSlot(r, s)).length;
-}
-
-function isoToHHMM(iso: string): string {
-  return iso.slice(11, 16);
 }
 
 function formatCurrency(amount: number): string {
   return `$${Math.round(amount).toLocaleString('es-AR')}`;
 }
 
-// ── colores por estado de pago ────────────────────────────────────────────────
+// ── transform: ScheduleFixedReservation → VirtualFixedReservation ─────────────
 
-function cellBg(r: Reservation): string {
-  if (r.paymentStatus === 'paid') {
-    return 'bg-emerald-500 hover:bg-emerald-600 border-emerald-600 text-white';
-  }
-  if (r.paymentStatus === 'partial') {
-    return 'bg-orange-200 hover:bg-orange-300 border-orange-400 text-orange-900';
-  }
-  return 'bg-amber-100 hover:bg-amber-200 border-amber-400 text-amber-900';
+function toVirtual(f: ScheduleFixedReservation, currentDate: string): VirtualFixedReservation {
+  const paidToday = f.lastPaidAt != null && f.lastPaidAt.slice(0, 10) === currentDate;
+  return {
+    id:            `fixed-${f.id}`,
+    rawId:         f.id,
+    courtId:       f.courtId,
+    dayOfWeek:     f.dayOfWeek,
+    duration:      f.duration,
+    timeStart:     f.timeStart,
+    timeEnd:       f.timeEnd,
+    clientName:    f.clientName,
+    type:          f.type ?? null,
+    isFixed:       true,
+    paymentStatus: paidToday ? 'paid' : 'pending',
+    totalPrice:    f.totalPrice    ?? null,
+    depositAmount: f.depositAmount ?? null,
+    carryOver:     f.carryOver,
+    lastPaidAt:    f.lastPaidAt ?? null,
+    court:         f.court,
+  };
 }
 
-// ── celda ─────────────────────────────────────────────────────────────────────
+// ── type guard ────────────────────────────────────────────────────────────────
 
-const EMPTY_STYLE = 'bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-400';
+function isVirtualFixed(entry: ScheduleEntry): entry is VirtualFixedReservation {
+  return 'isFixed' in entry && entry.isFixed === true;
+}
+
+// ── visual styles ─────────────────────────────────────────────────────────────
+
+function cellStyle(entry: ScheduleEntry): string {
+  if (isVirtualFixed(entry)) {
+    if (entry.paymentStatus === 'paid') {
+      return 'bg-emerald-500 hover:bg-emerald-600 border-emerald-600 text-white border-dashed cursor-pointer';
+    }
+    return 'bg-purple-100 border-purple-400 text-purple-900 border-dashed hover:bg-purple-200 cursor-pointer';
+  }
+  const r = entry as Reservation;
+  if (r.paymentStatus === 'paid')    return 'bg-emerald-500 hover:bg-emerald-600 border-emerald-600 text-white border-solid';
+  if (r.paymentStatus === 'partial') return 'bg-orange-200  hover:bg-orange-300  border-orange-400  text-orange-900 border-solid';
+  return                                    'bg-amber-100   hover:bg-amber-200   border-amber-400   text-amber-900  border-solid';
+}
+
+// ── Cell ──────────────────────────────────────────────────────────────────────
+
+const EMPTY_STYLE = 'bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-400 border-solid';
 
 interface CellProps {
-  reservation: Reservation | undefined;
+  entry: ScheduleEntry | undefined;
   onClick: () => void;
 }
 
-function Cell({ reservation, onClick }: CellProps) {
-  if (!reservation) {
+function Cell({ entry, onClick }: CellProps) {
+  if (!entry) {
     return (
       <button
         onClick={onClick}
@@ -95,56 +144,71 @@ function Cell({ reservation, onClick }: CellProps) {
     );
   }
 
-  const total     = parseFloat(reservation.totalPrice    ?? '0') || 0;
-  const deposit   = parseFloat(reservation.depositAmount ?? '0') || 0;
-  const remaining = total - deposit;
-  const fullyPaid = reservation.paymentStatus === 'paid' || (total > 0 && remaining <= 0);
+  const fixed = isVirtualFixed(entry);
 
-  const timeRange  = `${isoToHHMM(reservation.timeStart)} – ${isoToHHMM(reservation.timeEnd)}`;
-  const isPaidStyle = reservation.paymentStatus === 'paid';
+  const total     = entry.totalPrice     != null ? parseFloat(entry.totalPrice)     : 0;
+  const deposit   = entry.depositAmount  != null ? parseFloat(entry.depositAmount)  : 0;
+  const remaining = total - deposit;
+  const fullyPaid = !fixed && (entry as Reservation).paymentStatus === 'paid' || (total > 0 && remaining <= 0);
+
+  const timeRange = `${toHHMM(entry.timeStart)} – ${toHHMM(entry.timeEnd)}`;
+  const isPaidStyle = !fixed && (entry as Reservation).paymentStatus === 'paid';
 
   return (
     <button
       onClick={onClick}
-      className={`w-full h-full min-h-[32px] rounded border text-left transition-all duration-150 relative shadow-sm hover:shadow-md ${cellBg(reservation)}`}
+      className={`w-full h-full min-h-[32px] rounded border text-left transition-all duration-150 relative
+        ${fixed ? '' : 'shadow-sm hover:shadow-md'}
+        ${cellStyle(entry)}`}
     >
       <span className="flex flex-col h-full leading-tight px-2 py-1.5 overflow-hidden">
-        <span className="font-bold truncate text-[13px]">
-          {reservation.clientName}
+        {/* client name + "Fijo" badge */}
+        <span className="flex items-center gap-1.5 min-w-0">
+          <span className="font-bold truncate text-[13px]">{entry.clientName}</span>
+          {fixed && (
+            <span className="shrink-0 text-[9px] font-bold uppercase tracking-wide
+                             bg-purple-200 text-purple-700 border border-purple-300
+                             px-1.5 py-px rounded-full leading-none">
+              Fijo
+            </span>
+          )}
         </span>
+
         <span className={`text-[10px] font-normal mt-0.5 ${isPaidStyle ? 'opacity-80' : 'opacity-70'}`}>
           {timeRange}
         </span>
-        <span className="flex flex-col mt-1 gap-px text-[10px] font-normal">
-          {total > 0 && (
-            <span>{formatCurrency(total)} total</span>
-          )}
-          {deposit > 0 && (
-            <span>Seña: {formatCurrency(deposit)}</span>
-          )}
-          {fullyPaid ? (
-            <span className={`font-semibold ${isPaidStyle ? 'text-white' : 'text-emerald-700'}`}>
-              Pagado ✓
-            </span>
-          ) : total > 0 && (
-            <span className="font-semibold text-red-600">
-              Falta: {formatCurrency(remaining)}
-            </span>
-          )}
-        </span>
+
+        {/* financial summary — only for normal reservations */}
+        {!fixed && (
+          <span className="flex flex-col mt-1 gap-px text-[10px] font-normal">
+            {total > 0 && <span>{formatCurrency(total)} total</span>}
+            {deposit > 0 && <span>Seña: {formatCurrency(deposit)}</span>}
+            {fullyPaid ? (
+              <span className={`font-semibold ${isPaidStyle ? 'text-white' : 'text-emerald-700'}`}>
+                Pagado ✓
+              </span>
+            ) : total > 0 && (
+              <span className="font-semibold text-red-600">
+                Falta: {formatCurrency(remaining)}
+              </span>
+            )}
+          </span>
+        )}
       </span>
     </button>
   );
 }
 
-// ── grilla ────────────────────────────────────────────────────────────────────
+// ── ScheduleGrid ──────────────────────────────────────────────────────────────
 
 interface Props {
   date: string;
   courts: Court[];
+  clubId: number | null;
   refreshKey?: number;
   isOwner?: boolean;
   onCellClick: (courtId: number, slot: TimeSlot, reservation?: Reservation) => void;
+  onFixedClick?: (entry: VirtualFixedReservation) => void;
   onDeleteCourt?: (id: number) => Promise<void>;
   onRenameCourt?: (id: number, name: string) => Promise<void>;
 }
@@ -152,25 +216,27 @@ interface Props {
 export default function ScheduleGrid({
   date,
   courts,
+  clubId,
   refreshKey = 0,
   isOwner = false,
   onCellClick,
+  onFixedClick,
   onDeleteCourt,
   onRenameCourt,
 }: Props) {
-  const [reservations, setReservations] = useState<Reservation[]>([]);
-  const [loading, setLoading]           = useState(false);
-  const [error, setError]               = useState('');
+  const [entries,  setEntries]  = useState<ScheduleEntry[]>([]);
+  const [loading,  setLoading]  = useState(false);
+  const [error,    setError]    = useState('');
 
   // delete court modal state
-  const [pendingDelete, setPendingDelete]   = useState<Court | null>(null);
-  const [deletingCourt, setDeletingCourt]   = useState(false);
+  const [pendingDelete,  setPendingDelete]  = useState<Court | null>(null);
+  const [deletingCourt,  setDeletingCourt]  = useState(false);
 
   // rename court modal state
-  const [pendingRename, setPendingRename]   = useState<Court | null>(null);
-  const [renameValue, setRenameValue]       = useState('');
-  const [renameSaving, setRenameSaving]     = useState(false);
-  const [renameError, setRenameError]       = useState('');
+  const [pendingRename,  setPendingRename]  = useState<Court | null>(null);
+  const [renameValue,    setRenameValue]    = useState('');
+  const [renameSaving,   setRenameSaving]   = useState(false);
+  const [renameError,    setRenameError]    = useState('');
 
   const renameInputRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
@@ -178,17 +244,39 @@ export default function ScheduleGrid({
   }, [pendingRename]);
 
   useEffect(() => {
+    if (clubId === null || clubId === undefined) {
+      setEntries([]);
+      return;
+    }
+
     let cancelled = false;
     setLoading(true);
     setError('');
 
-    getReservations(date)
-      .then((data) => { if (!cancelled) setReservations(data); })
-      .catch(() => { if (!cancelled) setError('Error al cargar las reservas.'); })
-      .finally(() => { if (!cancelled) setLoading(false); });
+    getSchedule(date, clubId)
+      .then(({ reservations, fixedReservations }) => {
+        if (cancelled) return;
+
+        // Transform fixed reservations into virtual entries
+        const virtual = fixedReservations.map((f) => toVirtual(f, date));
+
+        // Merge and sort by courtId then timeStart (virtual minutes)
+        const merged: ScheduleEntry[] = [...reservations, ...virtual].sort((a, b) => {
+          if (a.courtId !== b.courtId) return a.courtId - b.courtId;
+          return toVirtualMinutes(a.timeStart) - toVirtualMinutes(b.timeStart);
+        });
+
+        setEntries(merged);
+      })
+      .catch(() => {
+        if (!cancelled) setError('Error al cargar las reservas.');
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
 
     return () => { cancelled = true; };
-  }, [date, refreshKey]);
+  }, [date, clubId, refreshKey]);
 
   if (loading) {
     return <p className="text-center text-gray-400 py-16">Cargando…</p>;
@@ -215,7 +303,6 @@ export default function ScheduleGrid({
     );
   }
 
-  // Use narrower columns when there are many courts so more fit on screen
   const colWidth = courts.length <= 4 ? 'min-w-[160px]' : courts.length <= 8 ? 'min-w-[130px]' : 'min-w-[110px]';
 
   async function confirmDelete() {
@@ -238,8 +325,8 @@ export default function ScheduleGrid({
     try {
       await onRenameCourt(pendingRename.id, renameValue.trim());
       setPendingRename(null);
-    } catch (err: any) {
-      setRenameError(err.message ?? 'Error al renombrar.');
+    } catch (err: unknown) {
+      setRenameError(err instanceof Error ? err.message : 'Error al renombrar.');
     } finally {
       setRenameSaving(false);
     }
@@ -309,23 +396,24 @@ export default function ScheduleGrid({
                   {slot}
                 </td>
                 {courts.map((court) => {
-                  const reservation = reservations.find(
-                    (r) => r.courtId === court.id && coversSlot(r, slot),
+                  const entry = entries.find(
+                    (e) => e.courtId === court.id && coversSlot(e, slot),
                   );
 
-                  // La franja ya está cubierta por un rowSpan → omitir TD
-                  if (reservation && !isFirstCoveredSlot(reservation, slot)) {
+                  // Cell already covered by a rowSpan → omit TD
+                  if (entry && !isFirstCoveredSlot(entry, slot)) {
                     return null;
                   }
 
-                  const span = reservation ? getRowSpan(reservation) : 1;
+                  const span = entry ? getRowSpan(entry) : 1;
+
+                  const handleClick = entry && isVirtualFixed(entry)
+                    ? () => onFixedClick?.(entry)
+                    : () => onCellClick(court.id, slot, entry as Reservation | undefined);
 
                   return (
                     <td key={court.id} rowSpan={span > 1 ? span : undefined} className="align-stretch">
-                      <Cell
-                        reservation={reservation}
-                        onClick={() => onCellClick(court.id, slot, reservation)}
-                      />
+                      <Cell entry={entry} onClick={handleClick} />
                     </td>
                   );
                 })}

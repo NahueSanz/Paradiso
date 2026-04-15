@@ -1,0 +1,85 @@
+We need to FIX the cash movement creation flow properly.
+
+--------------------------------
+CURRENT PROBLEM
+--------------------------------
+
+POST /cash fails with:
+
+"clubId must be a positive integer"
+
+The frontend is not sending clubId.
+
+BUT we do NOT want to hardcode or send clubId from the frontend.
+
+--------------------------------
+GOAL
+--------------------------------
+
+Make the system correctly resolve clubId from the authenticated user.
+
+Frontend should NOT send clubId.
+
+Backend must determine clubId automatically.
+
+--------------------------------
+CONTEXT
+--------------------------------
+
+We already have:
+
+- User authentication (req.user)
+- Membership model (userId + clubId)
+- Users belong to clubs via Membership
+
+--------------------------------
+TASK — BACKEND
+--------------------------------
+
+1. Modify POST /cash controller:
+
+- Remove clubId from request body validation
+- Do NOT expect clubId from frontend
+
+2. Resolve clubId using the authenticated user:
+
+- Use req.user.id
+- Find Membership:
+
+  prisma.membership.findFirst({
+    where: { userId: req.user.id }
+  })
+
+- Extract clubId from membership
+
+3. If no membership exists:
+   → throw 403 Forbidden
+
+4. Use this clubId when creating the cash movement
+
+--------------------------------
+TASK — FRONTEND
+--------------------------------
+
+1. Ensure POST /cash request DOES NOT include clubId
+
+2. Do NOT add any hardcoded values
+
+--------------------------------
+IMPORTANT
+--------------------------------
+
+- Do NOT break existing logic
+- Do NOT refactor unrelated code
+- Keep solution minimal and correct
+- Assume 1 user = 1 active club (for now)
+
+--------------------------------
+OUTPUT
+--------------------------------
+
+Show:
+
+1. Updated controller code for POST /cash
+2. Any necessary service changes
+3. Confirmation that frontend does not need changes

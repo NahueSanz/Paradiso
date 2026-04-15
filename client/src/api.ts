@@ -1,6 +1,35 @@
-import type { Club, Court, Membership, PaymentStatus, PlayStatus, Reservation } from './types';
+import type { Club, Court, FixedReservation, Membership, PaymentStatus, PlayStatus, Reservation } from './types';
 
-export const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+// ── Schedule ──────────────────────────────────────────────────────────────────
+// Returned by GET /schedule for the fixed-reservations array.
+// timeEnd is pre-computed on the server (timeStart + duration).
+export interface ScheduleFixedReservation {
+  id: number;
+  courtId: number;
+  dayOfWeek: number;
+  timeStart: string;          // "HH:MM"
+  timeEnd: string;            // "HH:MM"
+  duration: number;
+  clientName: string;
+  type: string | null;
+  totalPrice: string | null;
+  depositAmount: string | null;
+  carryOver: string;          // rolling deposit carry-over, "0" by default
+  lastPaidAt: string | null;  // ISO datetime of last payment, null if never paid
+  active: boolean;
+  court: { id: number; name: string };
+}
+
+export interface ScheduleResponse {
+  reservations: Reservation[];
+  fixedReservations: ScheduleFixedReservation[];
+}
+
+export function getSchedule(date: string, clubId: number): Promise<ScheduleResponse> {
+  return request(`/schedule?date=${date}&clubId=${clubId}`);
+}
+
+export const API_URL = import.meta.env.VITE_API_URL;
 const BASE = `${API_URL}/api`;
 
 function authHeaders(): Record<string, string> {
@@ -85,6 +114,7 @@ export interface UpdateReservationPayload {
   type?: string | null;
   totalPrice?: number | null;
   depositAmount?: number | null;
+  paidAmount?: number | null;
   paymentStatus?: PaymentStatus;
   playStatus?: PlayStatus;
 }
@@ -133,6 +163,67 @@ export function getReservationsReport(from: string, to: string, clubId: number):
   return request(`/analytics/reservations?from=${from}&to=${to}&clubId=${clubId}`);
 }
 
+// ── Fixed Reservations ────────────────────────────────────────────────────────
+
+export interface CreateFixedReservationPayload {
+  courtId: number;
+  dayOfWeek: number; // 0 = Sunday … 6 = Saturday (JS convention)
+  timeStart: string; // "HH:MM"
+  duration: number;  // positive integer (minutes)
+  clientName: string;
+  type?: string;
+  totalPrice?: number;
+  depositAmount?: number;
+}
+
+export type FixedReservationResponse = FixedReservation & { warning?: boolean };
+
+export function createFixedReservation(data: CreateFixedReservationPayload): Promise<FixedReservationResponse> {
+  return request('/fixed-reservations', { method: 'POST', body: JSON.stringify(data), headers: clubIdHeader() });
+}
+
+export function getFixedReservations(clubId: number): Promise<FixedReservation[]> {
+  return request(`/fixed-reservations?clubId=${clubId}`, { headers: clubIdHeader() });
+}
+
+export interface UpdateFixedReservationPayload {
+  clientName: string;
+  timeStart: string;
+  duration: number;
+  type?: string | null;
+  totalPrice?: number | null;
+  depositAmount?: number | null;
+}
+
+export function updateFixedReservation(id: number, data: UpdateFixedReservationPayload): Promise<FixedReservationResponse> {
+  return request(`/fixed-reservations/${id}`, { method: 'PUT', body: JSON.stringify(data), headers: clubIdHeader() });
+}
+
+export function toggleFixedReservation(id: number): Promise<FixedReservationResponse> {
+  return request(`/fixed-reservations/${id}/toggle`, { method: 'PATCH', headers: clubIdHeader() });
+}
+
+export function deleteFixedReservation(id: number): Promise<void> {
+  return request(`/fixed-reservations/${id}`, { method: 'DELETE', headers: clubIdHeader() });
+}
+
+export interface PayFixedReservationResponse {
+  id: number;
+  carryOver: string;
+  todayPays: number;
+  pricePerSlot: number;
+  depositAmount: number;
+  isLastWeek: boolean;
+}
+
+export function payFixedReservation(id: number, isLastWeek: boolean): Promise<PayFixedReservationResponse> {
+  return request(`/fixed-reservations/${id}/pay`, {
+    method: 'PATCH',
+    body: JSON.stringify({ isLastWeek }),
+    headers: clubIdHeader(),
+  });
+}
+
 // ── Memberships ───────────────────────────────────────────────────────────────
 
 export function getMembership(clubId: number): Promise<Membership> {
@@ -167,4 +258,30 @@ export interface AcceptInvitationResponse {
 
 export function acceptInvitation(data: AcceptInvitationPayload): Promise<AcceptInvitationResponse> {
   return request('/invitations/accept', { method: 'POST', body: JSON.stringify(data) });
+}
+
+// ── Cash ──────────────────────────────────────────────────────────────────────
+
+export interface CashMovement {
+  id: number;
+  type: 'income' | 'expense';
+  concept: string;
+  amount: number;
+  paymentMethod: string;
+  createdAt: string;
+}
+
+export interface CreateCashMovementPayload {
+  type: 'income' | 'expense';
+  concept: string;
+  amount: number;
+  paymentMethod: string;
+}
+
+export function getCashMovements(clubId: number, from: string, to: string): Promise<CashMovement[]> {
+  return request(`/cash?clubId=${clubId}&from=${from}&to=${to}`);
+}
+
+export function createCashMovement(data: CreateCashMovementPayload): Promise<CashMovement> {
+  return request('/cash', { method: 'POST', body: JSON.stringify(data), headers: clubIdHeader() });
 }

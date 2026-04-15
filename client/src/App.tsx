@@ -2,10 +2,11 @@ import { useEffect, useRef, useState } from 'react';
 import * as api from './api';
 import ScheduleGrid from './components/ScheduleGrid';
 import ReservationModal, { type FormData, type ModalState } from './components/ReservationModal';
+import FixedReservationModal from './components/FixedReservationModal';
 import { CreateClubModal, NoClubsEmptyState } from './components/ClubSelector';
 import InviteModal from './components/InviteModal';
 import Header from './components/Header';
-import type { Court, Reservation, TimeSlot } from './types';
+import type { Court, Reservation, TimeSlot, VirtualFixedReservation } from './types';
 import { useAuth } from './context/AuthContext';
 import { useClub } from './context/ClubContext';
 import { useMembership } from './context/MembershipContext';
@@ -258,6 +259,16 @@ export default function App() {
   const [showInviteModal,    setShowInviteModal]        = useState(false);
   const [showRenameClubModal, setShowRenameClubModal]   = useState(false);
   const [showProfileModal, setShowProfileModal]         = useState(false);
+  const [showFixedModal,  setShowFixedModal]  = useState(false);
+  const [editingFixed,    setEditingFixed]    = useState<VirtualFixedReservation | null>(null);
+
+  // Toast
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+
+  function showToast(message: string, type: 'success' | 'error' = 'success') {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 3500);
+  }
 
   // Fetch courts whenever selectedClubId or courtsRefreshKey changes
   useEffect(() => {
@@ -267,6 +278,7 @@ export default function App() {
       .then(setCourts)
       .catch(() => setCourtError('Error al cargar las canchas.'));
   }, [selectedClubId, courtsRefreshKey]);
+
 
   function refresh() { setRefreshKey((k) => k + 1); }
   function refreshCourts() { setCourtsKey((k) => k + 1); }
@@ -298,8 +310,8 @@ export default function App() {
     refresh();
   }
 
-  async function handleMarkPaid(id: number) {
-    await api.updateReservation(id, { paymentStatus: 'paid' });
+  async function handleMarkPaid(id: number, paidAmount: number) {
+    await api.updateReservation(id, { paymentStatus: 'paid', paidAmount });
     refresh();
   }
 
@@ -350,7 +362,7 @@ export default function App() {
 
       {/* Page toolbar */}
       <div className="bg-white border-b px-4 sm:px-6 py-2 flex items-center justify-between gap-3 flex-wrap">
-        {/* Owner actions */}
+        {/* Owner / Employee actions */}
         <div className="flex items-center gap-2 flex-wrap">
           {isOwner && (
             <button
@@ -376,6 +388,21 @@ export default function App() {
                   d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
               </svg>
               Invitar empleado
+            </button>
+          )}
+          {/* Visible to owner + employee */}
+          {selectedClubId && (
+            <button
+              onClick={() => setShowFixedModal(true)}
+              className="flex items-center gap-1.5 text-sm font-medium text-violet-700
+                         hover:text-violet-900 px-3 py-1.5 rounded-lg hover:bg-violet-50
+                         border border-violet-200 transition-colors"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                  d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              Reserva Fija
             </button>
           )}
         </div>
@@ -413,9 +440,11 @@ export default function App() {
             <ScheduleGrid
               date={date}
               courts={courts}
+              clubId={selectedClubId}
               refreshKey={refreshKey}
               isOwner={isOwner}
               onCellClick={openModal}
+              onFixedClick={(entry) => setEditingFixed(entry)}
               onDeleteCourt={handleDeleteCourt}
               onRenameCourt={handleRenameCourt}
             />
@@ -471,6 +500,40 @@ export default function App() {
           onClose={() => setShowProfileModal(false)}
           onSave={updateDisplayName}
         />
+      )}
+
+      {/* Fixed Reservation Modal (create or edit) */}
+      {(showFixedModal || editingFixed !== null) && (
+        <FixedReservationModal
+          courts={courts}
+          editData={editingFixed ?? undefined}
+          selectedDate={date}
+          onClose={() => { setShowFixedModal(false); setEditingFixed(null); }}
+          onSuccess={(message) => {
+            refresh();
+            showToast(message);
+          }}
+        />
+      )}
+
+      {/* Toast */}
+      {toast && (
+        <div
+          className={`fixed bottom-5 right-5 z-[200] flex items-center gap-2 px-4 py-3 rounded-xl shadow-lg
+            text-sm font-medium pointer-events-none transition-all
+            ${toast.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'}`}
+        >
+          {toast.type === 'success' ? (
+            <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
+            </svg>
+          ) : (
+            <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          )}
+          {toast.message}
+        </div>
       )}
     </div>
   );

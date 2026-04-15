@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { Reservation, TimeSlot } from "../types";
+import { createFixedReservation } from "../api";
 
 // ── tipos públicos ─────────────────────────────────────────────────────────────
 
@@ -24,11 +25,21 @@ interface Props {
   state: ModalState;
   onClose: () => void;
   onSave: (form: FormData) => Promise<void>;
-  onMarkPaid: (id: number) => Promise<void>;
+  onMarkPaid: (id: number, paidAmount: number) => Promise<void>;
   onDelete: (id: number) => Promise<void>;
 }
 
 // ── constantes ────────────────────────────────────────────────────────────────
+
+const DAYS_OF_WEEK = [
+  { label: "Lun", value: 1 },
+  { label: "Mar", value: 2 },
+  { label: "Mié", value: 3 },
+  { label: "Jue", value: 4 },
+  { label: "Vie", value: 5 },
+  { label: "Sáb", value: 6 },
+  { label: "Dom", value: 0 },
+];
 
 const RESERVATION_TYPE_LABELS: Record<string, string> = {
   booking:    "Partido",
@@ -107,7 +118,27 @@ export default function ReservationModal({
   const [busy,  setBusy]                = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
 
+  // ── estado turno fijo ──
+  const [isTurnoFijo,  setIsTurnoFijo]  = useState(false);
+  const [fixedDayOfWeek, setFixedDayOfWeek] = useState<number>(1); // 1 = Monday
+  const [fixedWarning, setFixedWarning] = useState(false);
+
   const isPaid = reservation?.paymentStatus === "paid";
+
+  // ── financial snapshot from the saved reservation ──
+  const savedTotal   = reservation?.totalPrice   != null ? parseFloat(reservation.totalPrice)   : 0;
+  const savedDeposit = reservation?.depositAmount != null ? parseFloat(reservation.depositAmount) : 0;
+  const savedPaid    = reservation?.paidAmount    != null ? parseFloat(reservation.paidAmount)    : null;
+  // Remaining: use paidAmount when available, otherwise fall back to deposit
+  const savedRemaining = savedPaid !== null
+    ? Math.max(0, savedTotal - savedPaid)
+    : Math.max(0, savedTotal - savedDeposit);
+  const depositCovered = savedPaid !== null && savedPaid >= savedDeposit && savedDeposit > 0;
+
+  // ── payment status badges ──
+  const isPaidFull      = savedTotal > 0 && savedPaid !== null && savedPaid >= savedTotal;
+  const isPartialPay    = savedTotal > 0 && savedPaid !== null && savedPaid > 0 && savedPaid < savedTotal;
+  const isDepositCovered = savedDeposit > 0 && savedPaid !== null && savedPaid >= savedDeposit;
 
   // ── estado de duración ──
   const initDuration = isEdit
@@ -135,12 +166,6 @@ export default function ReservationModal({
     parseFloat(depositAmount) > parseFloat(totalPrice);
   const isFree = totalPrice === '' || parseFloat(totalPrice) === 0;
 
-  // ── resumen financiero (calculado en tiempo real desde el formulario) ──
-  const summaryTotal     = parseFloat(totalPrice)    || 0;
-  const summaryDeposit   = parseFloat(depositAmount) || 0;
-  const summaryRemaining = summaryTotal - summaryDeposit;
-  const summaryPaid      = isPaid || (summaryTotal > 0 && summaryRemaining <= 0);
-
   const nameRef = useRef<HTMLInputElement>(null);
   useEffect(() => { nameRef.current?.focus(); }, []);
 
@@ -161,21 +186,13 @@ export default function ReservationModal({
     }
   }
 
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setError("");
-
-    if (duration === "custom" && (!customMinutes || parseInt(customMinutes, 10) <= 0)) {
-      setError("Ingresá una duración válida en minutos.");
-      return;
-    }
-
+  function parseAndValidatePrices(): { ok: false } | { ok: true; parsedTotalPrice?: number; parsedDepositAmount?: number } {
     let parsedTotalPrice: number | undefined;
     if (totalPrice !== "") {
       const n = Number(totalPrice);
       if (isNaN(n) || n < 0) {
         setError("El precio total debe ser un número no negativo.");
-        return;
+        return { ok: false };
       }
       parsedTotalPrice = n;
     }
@@ -185,13 +202,55 @@ export default function ReservationModal({
       const n = Number(depositAmount);
       if (isNaN(n) || n < 0) {
         setError("La seña debe ser un número no negativo.");
-        return;
+        return { ok: false };
       }
       if (parsedTotalPrice !== undefined && n > parsedTotalPrice) {
         setError("La seña no puede ser mayor que el precio total.");
-        return;
+        return { ok: false };
       }
       parsedDepositAmount = n;
+    }
+
+    return { ok: true, parsedTotalPrice, parsedDepositAmount };
+  }
+
+  function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError("");
+    setFixedWarning(false);
+
+    if (duration === "custom" && (!customMinutes || parseInt(customMinutes, 10) <= 0)) {
+      setError("Ingresá una duración válida en minutos.");
+      return;
+    }
+
+    const prices = parseAndValidatePrices();
+    if (!prices.ok) return;
+    const { parsedTotalPrice, parsedDepositAmount } = prices;
+
+    if (isTurnoFijo && !isEdit) {
+      setError("");
+      setBusy(true);
+      createFixedReservation({
+        courtId: state.courtId,
+        dayOfWeek: fixedDayOfWeek,
+        timeStart,
+        duration: effectiveMinutes,
+        clientName,
+        type,
+        totalPrice: parsedTotalPrice,
+        depositAmount: parsedDepositAmount,
+      })
+        .then((res) => {
+          if (res?.warning) {
+            setFixedWarning(true);
+          } else {
+            onClose();
+          }
+        })
+        .catch((err) => setError((err as Error).message))
+        .finally(() => setBusy(false));
+      return;
     }
 
     run(() =>
@@ -233,6 +292,28 @@ export default function ReservationModal({
                 </span>
               )}
             </p>
+            {isEdit && (isPaidFull || isPartialPay || isDepositCovered) && (
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                {isPaidFull && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-green-100 text-green-700 border border-green-200">
+                    <span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block" />
+                    Pagado completo
+                  </span>
+                )}
+                {isPartialPay && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-yellow-100 text-yellow-700 border border-yellow-200">
+                    <span className="w-1.5 h-1.5 rounded-full bg-yellow-500 inline-block" />
+                    Pago parcial
+                  </span>
+                )}
+                {isDepositCovered && !isPaidFull && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-blue-100 text-blue-700 border border-blue-200">
+                    <span className="w-1.5 h-1.5 rounded-full bg-blue-500 inline-block" />
+                    Seña cubierta
+                  </span>
+                )}
+              </div>
+            )}
           </div>
           <button
             onClick={onClose}
@@ -263,33 +344,38 @@ export default function ReservationModal({
           <div className="mx-6 mt-4 rounded-xl bg-gray-50 border border-gray-200 px-4 py-3 space-y-1">
             <div className="flex justify-between text-sm">
               <span className="text-gray-500">Total</span>
-              <span className="font-bold text-gray-800 text-base">{formatCurrency(summaryTotal)}</span>
+              <span className="font-bold text-gray-800 text-base">{formatCurrency(savedTotal)}</span>
             </div>
-            {summaryDeposit > 0 && (
+            {savedDeposit > 0 && (
               <div className="flex justify-between text-sm">
-                <span className="text-gray-500">Seña abonada</span>
-                <span className="font-semibold text-gray-700">{formatCurrency(summaryDeposit)}</span>
+                <span className="text-gray-500">Seña</span>
+                <span className="font-semibold text-gray-700">{formatCurrency(savedDeposit)}</span>
               </div>
             )}
-            {summaryDeposit > 0 && !summaryPaid && (
+            {savedPaid !== null && (
               <div className="flex justify-between text-sm">
-                <span className="text-gray-500">Restante</span>
-                <span className="font-semibold text-orange-600">{formatCurrency(summaryRemaining)}</span>
+                <span className="text-gray-500">Pagado</span>
+                <span className="font-semibold text-emerald-700">{formatCurrency(savedPaid)}</span>
               </div>
             )}
             <div className="flex justify-between text-sm border-t border-gray-200 pt-1 mt-1">
-              {summaryPaid ? (
+              {isPaid ? (
                 <>
                   <span className="text-gray-500">Estado</span>
                   <span className="font-bold text-emerald-600">Pagado ✓</span>
                 </>
               ) : (
                 <>
-                  <span className="text-gray-500">Adeuda</span>
-                  <span className="font-bold text-red-500">{formatCurrency(summaryRemaining)}</span>
+                  <span className="text-gray-500">Restante</span>
+                  <span className="font-bold text-red-500">{formatCurrency(savedRemaining)}</span>
                 </>
               )}
             </div>
+            {savedDeposit > 0 && (
+              <p className={`text-xs font-medium mt-0.5 ${depositCovered ? 'text-emerald-600' : 'text-amber-600'}`}>
+                {depositCovered ? 'Seña cubierta ✅' : 'Seña pendiente'}
+              </p>
+            )}
           </div>
         )}
 
@@ -364,6 +450,70 @@ export default function ReservationModal({
             </div>
           )}
 
+          {/* ── Turno fijo (solo en creación) ── */}
+          {!isEdit && (
+            <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 space-y-3">
+              <label className="flex items-center gap-3 cursor-pointer select-none">
+                <div className="relative">
+                  <input
+                    type="checkbox"
+                    className="sr-only peer"
+                    checked={isTurnoFijo}
+                    onChange={(e) => {
+                      setIsTurnoFijo(e.target.checked);
+                      setFixedWarning(false);
+                    }}
+                  />
+                  <div className="w-9 h-5 bg-gray-300 rounded-full peer-checked:bg-indigo-500 transition-colors" />
+                  <div className="absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform peer-checked:translate-x-4" />
+                </div>
+                <span className="text-sm font-medium text-gray-700">Turno fijo</span>
+              </label>
+
+              {isTurnoFijo && (
+                <div>
+                  <p className="text-xs font-medium text-gray-500 mb-2">Día de la semana</p>
+                  <div className="flex gap-1.5 flex-wrap">
+                    {DAYS_OF_WEEK.map(({ label, value }) => (
+                      <button
+                        key={value}
+                        type="button"
+                        onClick={() => setFixedDayOfWeek(value)}
+                        className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-colors
+                          ${fixedDayOfWeek === value
+                            ? "bg-indigo-600 text-white border-indigo-600"
+                            : "border-gray-300 text-gray-600 hover:border-indigo-400 hover:text-indigo-600"
+                          }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── Warning turno fijo ── */}
+          {fixedWarning && (
+            <div className="flex items-start gap-3 rounded-xl border border-yellow-300 bg-yellow-50 px-4 py-3">
+              <span className="text-lg leading-none mt-0.5">⚠️</span>
+              <div className="flex-1">
+                <p className="text-sm font-semibold text-yellow-800">Superposición detectada</p>
+                <p className="text-xs text-yellow-700 mt-0.5">
+                  Este turno fijo se superpone con una reserva existente.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={onClose}
+                className="text-yellow-600 hover:text-yellow-800 text-xs font-medium underline shrink-0"
+              >
+                Cerrar
+              </button>
+            </div>
+          )}
+
           {/* Precio total + Seña */}
           <div className="flex gap-3">
             <div className="flex-1">
@@ -421,7 +571,7 @@ export default function ReservationModal({
               <button
                 type="button"
                 disabled={isPaid || busy}
-                onClick={() => run(async () => { await onMarkPaid(reservation!.id); })}
+                onClick={() => run(async () => { await onMarkPaid(reservation!.id, savedTotal); })}
                 className={`w-full py-2.5 text-sm font-semibold rounded-lg border transition-all duration-150
                   ${isPaid
                     ? 'bg-emerald-50 border-emerald-300 text-emerald-700 cursor-default'
@@ -460,7 +610,13 @@ export default function ReservationModal({
               disabled={busy || depositExceedsTotal}
               className="px-5 py-2 text-sm font-medium bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 transition-colors"
             >
-              {busy ? "Guardando…" : isEdit ? "Actualizar" : "Crear"}
+              {busy
+                ? "Guardando…"
+                : isEdit
+                  ? "Actualizar"
+                  : isTurnoFijo
+                    ? "Crear turno fijo"
+                    : "Crear"}
             </button>
           </div>
         </div>
