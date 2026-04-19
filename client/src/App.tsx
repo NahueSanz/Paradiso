@@ -5,7 +5,7 @@ import ReservationModal, { type FormData, type ModalState } from './components/R
 import FixedReservationModal from './components/FixedReservationModal';
 import { CreateClubModal, NoClubsEmptyState } from './components/ClubSelector';
 import InviteModal from './components/InviteModal';
-import Header from './components/Header';
+import AppLayout from './components/AppLayout';
 import type { Court, Reservation, TimeSlot, VirtualFixedReservation } from './types';
 import { useAuth } from './context/AuthContext';
 import { useClub } from './context/ClubContext';
@@ -47,12 +47,12 @@ function CreateCourtModal({ onClose, onCreated }: CreateCourtModalProps) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6">
-        <h2 className="text-lg font-bold text-gray-800 mb-4">Agregar cancha</h2>
+      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6">
+        <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-4">Agregar cancha</h2>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
               Nombre de la cancha
             </label>
             <input
@@ -61,18 +61,19 @@ function CreateCourtModal({ onClose, onCreated }: CreateCourtModalProps) {
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Ej: Cancha 1"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none
-                         focus:ring-2 focus:ring-indigo-400"
+              className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm
+                         bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100
+                         focus:outline-none focus:ring-2 focus:ring-indigo-400"
             />
-            {error && <p className="text-xs text-red-600 mt-1">{error}</p>}
+            {error && <p className="text-xs text-red-600 dark:text-red-400 mt-1">{error}</p>}
           </div>
 
           <div className="flex gap-2 pt-1">
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 px-4 py-2 text-sm rounded-lg border border-gray-200 text-gray-600
-                         hover:bg-gray-50 transition-colors"
+              className="flex-1 px-4 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300
+                         hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
             >
               Cancelar
             </button>
@@ -124,27 +125,28 @@ function RenameClubModal({ currentName, onClose, onRenamed }: RenameClubModalPro
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6">
-        <h2 className="text-lg font-bold text-gray-800 mb-4">Editar nombre del club</h2>
+      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6">
+        <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-4">Editar nombre del club</h2>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Nombre</label>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Nombre</label>
             <input
               ref={inputRef}
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none
-                         focus:ring-2 focus:ring-indigo-400"
+              className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm
+                         bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100
+                         focus:outline-none focus:ring-2 focus:ring-indigo-400"
             />
-            {error && <p className="text-xs text-red-600 mt-1">{error}</p>}
+            {error && <p className="text-xs text-red-600 dark:text-red-400 mt-1">{error}</p>}
           </div>
           <div className="flex gap-2 pt-1">
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 px-4 py-2 text-sm rounded-lg border border-gray-200 text-gray-600
-                         hover:bg-gray-50 transition-colors"
+              className="flex-1 px-4 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300
+                         hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
             >
               Cancelar
             </button>
@@ -196,31 +198,32 @@ function ProfileModal({ currentDisplayName, onClose, onSave }: ProfileModalProps
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6">
-        <h2 className="text-lg font-bold text-gray-800 mb-4">Mi perfil</h2>
+      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6">
+        <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-4">Mi perfil</h2>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Nombre visible</label>
+            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Nombre visible</label>
             <input
               ref={inputRef}
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Ej: Juan"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none
-                         focus:ring-2 focus:ring-indigo-400"
+              className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm
+                         bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100
+                         focus:outline-none focus:ring-2 focus:ring-indigo-400"
             />
-            <p className="text-xs text-gray-400 mt-1">
+            <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
               Así aparecerá en las reservas que crees.
             </p>
-            {error && <p className="text-xs text-red-600 mt-1">{error}</p>}
+            {error && <p className="text-xs text-red-600 dark:text-red-400 mt-1">{error}</p>}
           </div>
           <div className="flex gap-2 pt-1">
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 px-4 py-2 text-sm rounded-lg border border-gray-200 text-gray-600
-                         hover:bg-gray-50 transition-colors"
+              className="flex-1 px-4 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300
+                         hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
             >
               Cancelar
             </button>
@@ -353,63 +356,62 @@ export default function App() {
   const showEmptyState = !loadingClubs && clubs.length === 0 && isOwner;
 
   return (
-    <div className="min-h-screen flex flex-col">
-      {/* Header */}
-      <Header
-        onRenameClub={() => setShowRenameClubModal(true)}
-        onShowProfile={() => setShowProfileModal(true)}
-      />
-
-      {/* Page toolbar */}
-      <div className="bg-white border-b px-4 sm:px-6 py-2 flex items-center justify-between gap-3 flex-wrap">
-        {/* Owner / Employee actions */}
-        <div className="flex items-center gap-2 flex-wrap">
-          {isOwner && (
-            <button
-              onClick={() => setCourtModal(true)}
-              className="flex items-center gap-1.5 text-sm font-medium text-white bg-indigo-600
-                         hover:bg-indigo-700 px-3 py-1.5 rounded-lg transition-colors"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-              </svg>
-              Agregar cancha
-            </button>
-          )}
-          {isOwner && (
-            <button
-              onClick={() => setShowInviteModal(true)}
-              className="flex items-center gap-1.5 text-sm font-medium text-indigo-600
-                         hover:text-indigo-800 px-3 py-1.5 rounded-lg hover:bg-indigo-50
-                         border border-indigo-200 transition-colors"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                  d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
-              </svg>
-              Invitar empleado
-            </button>
-          )}
-          {/* Visible to owner + employee */}
-          {selectedClubId && (
-            <button
-              onClick={() => setShowFixedModal(true)}
-              className="flex items-center gap-1.5 text-sm font-medium text-violet-700
-                         hover:text-violet-900 px-3 py-1.5 rounded-lg hover:bg-violet-50
-                         border border-violet-200 transition-colors"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                  d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-              </svg>
-              Reserva Fija
-            </button>
-          )}
+    <AppLayout
+      onRenameClub={() => setShowRenameClubModal(true)}
+      onShowProfile={() => setShowProfileModal(true)}
+    >
+      {/* Page header */}
+      <div className="sticky top-0 z-30 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 px-4 sm:px-6 py-3">
+        <div className="flex items-center justify-between gap-3 flex-wrap mb-2">
+          <h1 className="text-xl font-bold text-slate-800 dark:text-slate-200">Turnos</h1>
+          <div className="flex items-center gap-2 flex-wrap">
+            {isOwner && (
+              <button
+                onClick={() => setCourtModal(true)}
+                className="flex items-center gap-1.5 text-sm font-medium text-white bg-indigo-600
+                           hover:bg-indigo-700 px-3 py-1.5 rounded-lg transition-colors"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+                Agregar cancha
+              </button>
+            )}
+            {isOwner && (
+              <button
+                onClick={() => setShowInviteModal(true)}
+                className="flex items-center gap-1.5 text-sm font-medium text-indigo-600
+                           hover:text-indigo-800 px-3 py-1.5 rounded-lg hover:bg-indigo-50
+                           dark:hover:bg-indigo-900/30 border border-indigo-200 dark:border-indigo-700
+                           dark:text-indigo-400 transition-colors"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                    d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
+                </svg>
+                Invitar empleado
+              </button>
+            )}
+            {selectedClubId && (
+              <button
+                onClick={() => setShowFixedModal(true)}
+                className="flex items-center gap-1.5 text-sm font-medium text-violet-700
+                           hover:text-violet-900 px-3 py-1.5 rounded-lg hover:bg-violet-50
+                           dark:hover:bg-violet-900/30 border border-violet-200 dark:border-violet-700
+                           dark:text-violet-400 transition-colors"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                    d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+                Reserva Fija
+              </button>
+            )}
+          </div>
         </div>
 
-        {/* Legend + date picker */}
-        <div className="flex items-center gap-4 ml-auto flex-wrap">
-          <div className="hidden sm:flex items-center gap-3 text-xs text-gray-600">
+        <div className="flex items-center gap-4 flex-wrap">
+          <div className="hidden sm:flex items-center gap-3 text-xs text-slate-600 dark:text-slate-400">
             {legend.map(({ label, className }) => (
               <span key={label} className="flex items-center gap-1">
                 <span className={`inline-block w-3 h-3 rounded-sm ${className}`} />
@@ -421,19 +423,21 @@ export default function App() {
             type="date"
             value={date}
             onChange={(e) => setDate(e.target.value)}
-            className="border rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+            className="ml-auto border dark:border-slate-600 rounded-lg px-3 py-1.5 text-sm
+                       bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100
+                       focus:outline-none focus:ring-2 focus:ring-indigo-400"
           />
         </div>
       </div>
 
-      {/* Cuerpo */}
-      <main className="flex-1 p-4 sm:p-6">
+      {/* Schedule content */}
+      <div className="p-4 sm:p-6">
         {showEmptyState ? (
           <NoClubsEmptyState onCreateClick={() => setShowCreateClubModal(true)} />
         ) : (
           <>
             {courtError && (
-              <p className="mb-4 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-4 py-2">
+              <p className="mb-4 text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg px-4 py-2">
                 {courtError}
               </p>
             )}
@@ -450,7 +454,7 @@ export default function App() {
             />
           </>
         )}
-      </main>
+      </div>
 
       {/* Reservation Modal */}
       {modal && (
@@ -535,6 +539,6 @@ export default function App() {
           {toast.message}
         </div>
       )}
-    </div>
+    </AppLayout>
   );
 }

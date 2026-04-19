@@ -1,5 +1,6 @@
 /** @type {import('tailwindcss').Config} */
 export default {
+  darkMode: 'class',
   content: ['./index.html', './src/**/*.{ts,tsx}'],
   theme: {
     extend: {
@@ -38,6 +39,13 @@ export default {
           DEFAULT: "oklch(var(--card))",
           foreground: "oklch(var(--card-foreground))",
         },
+        'app-bg':      '#0f172a',
+        'app-surface': '#1e293b',
+        'app-card':    '#334155',
+        'app-border':  '#475569',
+        'app-text':    '#e2e8f0',
+        'app-muted':   '#94a3b8',
+        'app-accent':  '#6366f1',
       },
     },
   },

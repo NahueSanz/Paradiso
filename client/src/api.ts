@@ -268,6 +268,7 @@ export interface CashMovement {
   concept: string;
   amount: number;
   paymentMethod: string;
+  relatedProductId?: number | null;
   createdAt: string;
 }
 
@@ -284,4 +285,106 @@ export function getCashMovements(clubId: number, from: string, to: string): Prom
 
 export function createCashMovement(data: CreateCashMovementPayload): Promise<CashMovement> {
   return request('/cash', { method: 'POST', body: JSON.stringify(data), headers: clubIdHeader() });
+}
+
+// ── Stock / Products ──────────────────────────────────────────────────────────
+
+export interface Product {
+  id: number;
+  name: string;
+  salePrice: number;
+  purchasePrice: number;
+  stock: number;
+}
+
+export interface CreateProductPayload {
+  name: string;
+  salePrice: number;
+  purchasePrice: number;
+  stock: number;
+}
+
+export interface UpdateProductPayload {
+  name?: string;
+  salePrice?: number;
+  purchasePrice?: number;
+  stock?: number;
+}
+
+export interface SellProductPayload {
+  productId: number;
+  quantity: number;
+  paymentMethod: 'cash' | 'transfer' | 'card';
+}
+
+export function getProducts(clubId: number): Promise<Product[]> {
+  return request(`/products?clubId=${clubId}`);
+}
+
+export function createProduct(data: CreateProductPayload): Promise<Product> {
+  return request('/products', { method: 'POST', body: JSON.stringify(data), headers: clubIdHeader() });
+}
+
+export function updateProduct(id: number, data: UpdateProductPayload): Promise<Product> {
+  return request(`/products/${id}`, { method: 'PUT', body: JSON.stringify(data), headers: clubIdHeader() });
+}
+
+export function deleteProduct(id: number): Promise<void> {
+  return request(`/products/${id}`, { method: 'DELETE', headers: clubIdHeader() });
+}
+
+export function sellProduct(data: SellProductPayload): Promise<Product> {
+  return request('/products/sell', { method: 'POST', body: JSON.stringify(data), headers: clubIdHeader() });
+}
+
+export function cashSellProduct(data: SellProductPayload): Promise<Product> {
+  return request('/cash/sell', { method: 'POST', body: JSON.stringify(data), headers: clubIdHeader() });
+}
+
+// ── Movements ─────────────────────────────────────────────────────────────────
+
+export interface Movement {
+  id: number;
+  clubId: number;
+  type: 'sale' | 'manual';
+  amount: number;
+  description: string;
+  productId: number | null;
+  product: { id: number; name: string } | null;
+  quantity: number | null;
+  status: 'active' | 'cancelled';
+  paymentMethod: 'cash' | 'mercadopago';
+  createdAt: string;
+}
+
+export interface CreateManualMovementPayload {
+  amount: number;
+  description: string;
+  paymentMethod: 'cash' | 'mercadopago';
+}
+
+export interface CreateSaleMovementPayload {
+  productId: number;
+  quantity: number;
+  paymentMethod: 'cash' | 'mercadopago';
+}
+
+export function getMovements(clubId: number): Promise<Movement[]> {
+  return request(`/movements?clubId=${clubId}`);
+}
+
+export function createManualMovement(data: CreateManualMovementPayload): Promise<Movement> {
+  return request('/movements/manual', { method: 'POST', body: JSON.stringify(data), headers: clubIdHeader() });
+}
+
+export function createSaleMovement(data: CreateSaleMovementPayload): Promise<Movement> {
+  return request('/movements/sale', { method: 'POST', body: JSON.stringify(data), headers: clubIdHeader() });
+}
+
+export function cancelMovement(id: number): Promise<Movement> {
+  return request(`/movements/${id}/cancel`, { method: 'PATCH', headers: clubIdHeader() });
+}
+
+export function deleteMovement(id: number): Promise<void> {
+  return request(`/movements/${id}`, { method: 'DELETE', headers: clubIdHeader() });
 }

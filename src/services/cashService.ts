@@ -10,8 +10,18 @@ export interface CreateCashMovementInput {
   fixedReservationId?: number;
 }
 
+// Prisma returns Decimal fields as objects that serialize to strings in JSON.
+// Always convert amount to a JS number before returning to the frontend.
+function serializeMovement(m: { amount: unknown; [key: string]: unknown }) {
+  return {
+    ...m,
+    amount: Number(m.amount),
+  };
+}
+
 export async function createCashMovement(input: CreateCashMovementInput) {
-  return prisma.cashMovement.create({ data: input });
+  const movement = await prisma.cashMovement.create({ data: input });
+  return serializeMovement(movement);
 }
 
 export async function getCashMovementsByDateRange(
@@ -19,7 +29,7 @@ export async function getCashMovementsByDateRange(
   from: string,
   to: string,
 ) {
-  return prisma.cashMovement.findMany({
+  const movements = await prisma.cashMovement.findMany({
     where: {
       clubId,
       createdAt: {
@@ -29,4 +39,5 @@ export async function getCashMovementsByDateRange(
     },
     orderBy: { createdAt: 'desc' },
   });
+  return movements.map(serializeMovement);
 }

@@ -1,8 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useClub } from '../context/ClubContext';
-import ClubSelector from '../components/ClubSelector';
 import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, Legend, ResponsiveContainer,
@@ -10,7 +9,7 @@ import {
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import * as api from '../api';
-import type { RevenueData, ReservationReportRow } from '../api';
+import type { CashMovement, RevenueData, ReservationReportRow } from '../api';
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -38,12 +37,6 @@ function fmtDateFull(iso: string) {
   return `${d}/${m}/${y}`;
 }
 
-function fmtCurrencyPDF(n: number) {
-  return new Intl.NumberFormat('es-AR', {
-    style: 'currency', currency: 'ARS', maximumFractionDigits: 0,
-  }).format(n);
-}
-
 const TYPE_LABEL: Record<string, string> = {
   booking:    'Partido',
   class:      'Clase',
@@ -57,12 +50,20 @@ const PAYMENT_LABEL: Record<string, string> = {
   paid:    'Pagado',
 };
 
+const MODE_TITLE: Record<Mode, string> = {
+  courts:   'Reporte de Alquileres',
+  cash:     'Reporte de Caja',
+  combined: 'Reporte Combinado',
+};
+
 async function generatePDF(
+  mode: Mode,
   from: string,
   to: string,
   grandTotal: number,
-  totalByType: Record<string, number>,
-  rows: ReservationReportRow[],
+  totalByCategory: Record<string, number>,
+  reservationRows: ReservationReportRow[],
+  cashMovements: CashMovement[],
 ) {
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
   const pageW = doc.internal.pageSize.getWidth();
@@ -75,35 +76,42 @@ async function generatePDF(
     hour: '2-digit', minute: '2-digit',
   });
 
-  // ── header block ──────────────────────────────────────────────────────────
-  doc.setFillColor(55, 65, 81); // dark gray
-  doc.rect(0, 0, pageW, 28, 'F');
+  const drawPageFooter = () => {
+    const pageCount = (doc as any).internal.getNumberOfPages();
+    for (let i = 1; i <= pageCount; i++) {
+      doc.setPage(i);
+      doc.setFontSize(7);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(156, 163, 175);
+      doc.text('Generado automáticamente por el sistema · Padel Paradiso', marginL, pageH - 6);
+      doc.text(`Página ${i} de ${pageCount}`, pageW - marginR - 20, pageH - 6);
+    }
+  };
 
+  // ── header ──
+  doc.setFillColor(55, 65, 81);
+  doc.rect(0, 0, pageW, 28, 'F');
   doc.setTextColor(255, 255, 255);
   doc.setFontSize(20);
   doc.setFont('helvetica', 'bold');
-  doc.text('Reporte de Ingresos', marginL, 12);
-
+  doc.text(MODE_TITLE[mode], marginL, 12);
   doc.setFontSize(10);
   doc.setFont('helvetica', 'normal');
   doc.text('Padel Paradiso', marginL, 19);
-
   doc.setFontSize(9);
   doc.setTextColor(209, 213, 219);
   doc.text(`Período: ${fmtDateFull(from)} — ${fmtDateFull(to)}`, marginL, 25);
   doc.text(`Generado: ${generatedAt}`, pageW - marginR - 60, 25);
 
-  // ── summary section ───────────────────────────────────────────────────────
   let y = 36;
 
+  // ── summary boxes ──
   doc.setTextColor(31, 41, 55);
   doc.setFontSize(11);
   doc.setFont('helvetica', 'bold');
   doc.text('Resumen de ingresos', marginL, y);
-
   y += 5;
 
-  // Total revenue highlight box
   doc.setFillColor(238, 242, 255);
   doc.roundedRect(marginL, y, 60, 16, 2, 2, 'F');
   doc.setFontSize(8);
@@ -112,21 +120,31 @@ async function generatePDF(
   doc.text('TOTAL DEL PERÍODO', marginL + 3, y + 5);
   doc.setFontSize(13);
   doc.setFont('helvetica', 'bold');
-  doc.text(fmtCurrencyPDF(grandTotal), marginL + 3, y + 13);
+  doc.text(fmtCurrency(grandTotal), marginL + 3, y + 13);
 
-  // Type breakdown boxes
-  const types: Array<[string, string, [number, number, number]]> = [
-    ['booking',    'Partidos',  [59, 130, 246]],
-    ['class',      'Clases',    [168, 85, 247]],
-    ['challenge',  'Desafíos',  [249, 115, 22]],
-    ['tournament', 'Torneos',   [239, 68, 68]],
-  ];
+  type BoxDef = [string, string, [number, number, number]];
+  const boxDefs: BoxDef[] = mode === 'courts'
+    ? [
+        ['booking',    'Partidos',  [59, 130, 246]],
+        ['class',      'Clases',    [168, 85, 247]],
+        ['challenge',  'Desafíos',  [249, 115, 22]],
+        ['tournament', 'Torneos',   [239, 68, 68]],
+      ]
+    : mode === 'cash'
+      ? [
+          ['productos', 'Productos', [16, 185, 129]],
+          ['egresos',   'Egresos',   [239, 68, 68]],
+        ]
+      : [
+          ['reservas',  'Reservas',  [59, 130, 246]],
+          ['productos', 'Productos', [16, 185, 129]],
+          ['egresos',   'Egresos',   [239, 68, 68]],
+        ];
 
   let boxX = marginL + 65;
-  const boxW = (contentW - 65) / 4 - 3;
+  const boxW = (contentW - 65) / boxDefs.length - 3;
 
-  for (const [key, label, [r, g, b]] of types) {
-    doc.setFillColor(r, g, b, 0.08);
+  for (const [key, label, [r, g, b]] of boxDefs) {
     doc.setFillColor(248, 250, 252);
     doc.roundedRect(boxX, y, boxW, 16, 2, 2, 'F');
     doc.setDrawColor(r, g, b);
@@ -139,105 +157,200 @@ async function generatePDF(
     doc.setFontSize(10);
     doc.setFont('helvetica', 'bold');
     doc.setTextColor(31, 41, 55);
-    doc.text(fmtCurrencyPDF(totalByType[key] ?? 0), boxX + 3, y + 13);
+    doc.text(fmtCurrency(totalByCategory[key] ?? 0), boxX + 3, y + 13);
     boxX += boxW + 3;
   }
 
   y += 24;
 
-  // ── reservations table ────────────────────────────────────────────────────
-  doc.setFontSize(11);
-  doc.setFont('helvetica', 'bold');
-  doc.setTextColor(31, 41, 55);
-  doc.text('Detalle de reservas', marginL, y);
-  y += 3;
+  // ── reservations table (courts + combined) ──
+  if (mode === 'courts' || mode === 'combined') {
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(31, 41, 55);
+    doc.text('Detalle de reservas', marginL, y);
+    y += 3;
 
-  const tableBody = rows.map((r) => [
-    fmtDateFull(r.date),
-    r.courtName,
-    r.clientName,
-    TYPE_LABEL[r.type] ?? r.type,
-    `${r.timeStart} – ${r.timeEnd}`,
-    PAYMENT_LABEL[r.paymentStatus] ?? r.paymentStatus,
-    fmtCurrencyPDF(r.totalPrice),
-    r.depositAmount > 0 ? fmtCurrencyPDF(r.depositAmount) : '—',
-  ]);
+    const tableBody = reservationRows.map((r) => [
+      fmtDateFull(r.date),
+      r.courtName,
+      r.clientName,
+      TYPE_LABEL[r.type] ?? r.type,
+      `${r.timeStart} – ${r.timeEnd}`,
+      PAYMENT_LABEL[r.paymentStatus] ?? r.paymentStatus,
+      fmtCurrency(r.totalPrice),
+      r.depositAmount > 0 ? fmtCurrency(r.depositAmount) : '—',
+    ]);
 
-  autoTable(doc, {
-    startY: y,
-    head: [['Fecha', 'Cancha', 'Cliente', 'Tipo', 'Horario', 'Pago', 'Monto', 'Seña']],
-    body: tableBody,
-    margin: { left: marginL, right: marginR },
-    styles: {
-      fontSize: 8,
-      cellPadding: 2.5,
-      textColor: [31, 41, 55],
-      lineColor: [229, 231, 235],
-      lineWidth: 0.2,
-    },
-    headStyles: {
-      fillColor: [55, 65, 81],
-      textColor: [255, 255, 255],
-      fontSize: 8,
-      fontStyle: 'bold',
-      halign: 'left',
-    },
-    alternateRowStyles: {
-      fillColor: [249, 250, 251],
-    },
-    columnStyles: {
-      0: { cellWidth: 22 },
-      1: { cellWidth: 28 },
-      2: { cellWidth: 'auto' },
-      3: { cellWidth: 22 },
-      4: { cellWidth: 30 },
-      5: { cellWidth: 22 },
-      6: { cellWidth: 28, halign: 'right' },
-      7: { cellWidth: 24, halign: 'right' },
-    },
-    didDrawPage: (hookData) => {
-      // footer on each page
-      const pageCount = (doc as any).internal.getNumberOfPages();
-      const currentPage = hookData.pageNumber;
-      doc.setFontSize(7);
-      doc.setFont('helvetica', 'normal');
-      doc.setTextColor(156, 163, 175);
-      doc.text(
-        'Generado automáticamente por el sistema · Padel Paradiso',
-        marginL,
-        pageH - 6,
-      );
-      doc.text(
-        `Página ${currentPage} de ${pageCount}`,
-        pageW - marginR - 20,
-        pageH - 6,
-      );
-    },
-  });
+    autoTable(doc, {
+      startY: y,
+      head: [['Fecha', 'Cancha', 'Cliente', 'Tipo', 'Horario', 'Pago', 'Monto', 'Seña']],
+      body: tableBody,
+      margin: { left: marginL, right: marginR },
+      styles: { fontSize: 8, cellPadding: 2.5, textColor: [31, 41, 55], lineColor: [229, 231, 235], lineWidth: 0.2 },
+      headStyles: { fillColor: [55, 65, 81], textColor: [255, 255, 255], fontSize: 8, fontStyle: 'bold', halign: 'left' },
+      alternateRowStyles: { fillColor: [249, 250, 251] },
+      columnStyles: {
+        0: { cellWidth: 22 },
+        1: { cellWidth: 28 },
+        2: { cellWidth: 'auto' },
+        3: { cellWidth: 22 },
+        4: { cellWidth: 30 },
+        5: { cellWidth: 22 },
+        6: { cellWidth: 28, halign: 'right' },
+        7: { cellWidth: 24, halign: 'right' },
+      },
+    });
 
-  doc.save(`reporte_${from}_${to}.pdf`);
+    y = (doc as any).lastAutoTable.finalY + 8;
+  }
+
+  // ── cash movements table (cash + combined) ──
+  if (mode === 'cash' || mode === 'combined') {
+    if (mode === 'combined' && y > pageH - 60) {
+      doc.addPage();
+      y = 20;
+    }
+
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(31, 41, 55);
+    doc.text('Movimientos de caja', marginL, y);
+    y += 3;
+
+    const PAYMENT_METHOD_LABEL: Record<string, string> = {
+      cash: 'Efectivo', transfer: 'Transferencia', card: 'Tarjeta',
+    };
+
+    const cashBody = cashMovements.map((m) => [
+      fmtDateFull(m.createdAt.slice(0, 10)),
+      m.concept,
+      m.type === 'income' ? 'Ingreso' : 'Egreso',
+      PAYMENT_METHOD_LABEL[m.paymentMethod] ?? m.paymentMethod,
+      fmtCurrency(m.amount),
+    ]);
+
+    autoTable(doc, {
+      startY: y,
+      head: [['Fecha', 'Concepto', 'Tipo', 'Método', 'Monto']],
+      body: cashBody,
+      margin: { left: marginL, right: marginR },
+      styles: { fontSize: 8, cellPadding: 2.5, textColor: [31, 41, 55], lineColor: [229, 231, 235], lineWidth: 0.2 },
+      headStyles: { fillColor: [55, 65, 81], textColor: [255, 255, 255], fontSize: 8, fontStyle: 'bold', halign: 'left' },
+      alternateRowStyles: { fillColor: [249, 250, 251] },
+      columnStyles: {
+        0: { cellWidth: 24 },
+        1: { cellWidth: 'auto' },
+        2: { cellWidth: 22 },
+        3: { cellWidth: 28 },
+        4: { cellWidth: 30, halign: 'right' },
+      },
+      didParseCell: (data) => {
+        if (data.section === 'body' && data.column.index === 2) {
+          const val = data.cell.raw as string;
+          data.cell.styles.textColor = val === 'Ingreso' ? [16, 185, 129] : [239, 68, 68];
+        }
+      },
+    });
+  }
+
+  drawPageFooter();
+  doc.save(`reporte_${mode}_${from}_${to}.pdf`);
 }
 
-// ─── constants ───────────────────────────────────────────────────────────────
+// ─── mode & category meta ─────────────────────────────────────────────────────
 
-const TYPE_META = {
+type Mode = 'courts' | 'cash' | 'combined';
+
+type CatMeta = { label: string; color: string };
+
+const COURTS_META: Record<string, CatMeta> = {
   booking:    { label: 'Reservas',   color: '#3B82F6' },
   class:      { label: 'Clases',     color: '#A855F7' },
   challenge:  { label: 'Desafíos',   color: '#F97316' },
   tournament: { label: 'Torneos',    color: '#EF4444' },
-} as const;
+};
 
-type TypeKey = keyof typeof TYPE_META;
+const CASH_META: Record<string, CatMeta> = {
+  productos: { label: 'Productos', color: '#10B981' },
+  egresos:   { label: 'Egresos',   color: '#EF4444' },
+};
 
-// ─── stat card ───────────────────────────────────────────────────────────────
+const COMBINED_META: Record<string, CatMeta> = {
+  reservas:  { label: 'Reservas',  color: '#3B82F6' },
+  productos: { label: 'Productos', color: '#10B981' },
+  egresos:   { label: 'Egresos',   color: '#EF4444' },
+};
+
+const EXPENSE_KEYS = new Set(['egresos']);
+
+function getMetaForMode(mode: Mode): Record<string, CatMeta> {
+  if (mode === 'courts') return COURTS_META;
+  if (mode === 'cash') return CASH_META;
+  return COMBINED_META;
+}
+
+// ─── unified day data ─────────────────────────────────────────────────────────
+
+interface UnifiedDay {
+  date: string;
+  categories: Record<string, number>;
+  totalIncome: number;
+  totalExpenses: number;
+}
+
+function computeUnifiedDays(
+  mode: Mode,
+  revenueData: RevenueData | null,
+  cashMovements: CashMovement[],
+): UnifiedDay[] {
+  const dateMap = new Map<string, Record<string, number>>();
+
+  if (mode !== 'cash' && revenueData) {
+    for (const day of revenueData.days) {
+      if (mode === 'courts') {
+        dateMap.set(day.date, { ...day.totals });
+      } else {
+        dateMap.set(day.date, { reservas: day.total });
+      }
+    }
+  }
+
+  if (mode !== 'courts') {
+    for (const m of cashMovements) {
+      const date = m.createdAt.slice(0, 10);
+      const cats = dateMap.get(date) ?? {};
+      if (m.type === 'income') {
+        cats.productos = (cats.productos ?? 0) + m.amount;
+      } else {
+        cats.egresos = (cats.egresos ?? 0) + m.amount;
+      }
+      dateMap.set(date, cats);
+    }
+  }
+
+  return Array.from(dateMap.entries())
+    .map(([date, categories]) => {
+      let totalIncome = 0;
+      let totalExpenses = 0;
+      for (const [k, v] of Object.entries(categories)) {
+        if (EXPENSE_KEYS.has(k)) totalExpenses += v;
+        else totalIncome += v;
+      }
+      return { date, categories, totalIncome, totalExpenses };
+    })
+    .sort((a, b) => a.date.localeCompare(b.date));
+}
+
+// ─── sub-components ───────────────────────────────────────────────────────────
 
 function StatCard({
   label, value, color, pct,
 }: { label: string; value: number; color: string; pct: number }) {
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 flex flex-col gap-2">
+    <div className="bg-white dark:bg-app-card rounded-2xl shadow-sm border border-gray-100 dark:border-app-border p-5 flex flex-col gap-2">
       <div className="flex items-center justify-between">
-        <span className="text-sm font-medium text-gray-500">{label}</span>
+        <span className="text-sm font-medium text-gray-500 dark:text-app-muted">{label}</span>
         <span
           className="text-xs font-semibold px-2 py-0.5 rounded-full"
           style={{ background: `${color}22`, color }}
@@ -245,26 +358,24 @@ function StatCard({
           {pct.toFixed(1)}%
         </span>
       </div>
-      <p className="text-2xl font-bold text-gray-900">{fmtCurrency(value)}</p>
-      <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden">
-        <div className="h-full rounded-full" style={{ width: `${pct}%`, background: color }} />
+      <p className="text-2xl font-bold text-gray-900 dark:text-app-text">{fmtCurrency(value)}</p>
+      <div className="h-1.5 rounded-full bg-gray-100 dark:bg-slate-700 overflow-hidden">
+        <div className="h-full rounded-full" style={{ width: `${Math.min(pct, 100)}%`, background: color }} />
       </div>
     </div>
   );
 }
 
-// ─── custom tooltip ──────────────────────────────────────────────────────────
-
-function CustomTooltip({ active, payload, label }: any) {
+function CustomTooltip({ active, payload, label, meta }: any) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="bg-white border border-gray-200 rounded-xl shadow-lg px-4 py-3 text-sm">
-      <p className="font-semibold text-gray-700 mb-2">{label}</p>
+    <div className="bg-white dark:bg-app-card border border-gray-200 dark:border-app-border rounded-xl shadow-lg px-4 py-3 text-sm">
+      <p className="font-semibold text-gray-700 dark:text-app-text mb-2">{label}</p>
       {payload.map((p: any) => (
         <div key={p.dataKey} className="flex items-center gap-2 mb-1">
           <span className="w-2.5 h-2.5 rounded-full" style={{ background: p.color }} />
-          <span className="text-gray-600">{TYPE_META[p.dataKey as TypeKey]?.label ?? p.dataKey}:</span>
-          <span className="font-medium text-gray-900">{fmtCurrency(p.value)}</span>
+          <span className="text-gray-600 dark:text-app-muted">{meta[p.dataKey]?.label ?? p.dataKey}:</span>
+          <span className="font-medium text-gray-900 dark:text-app-text">{fmtCurrency(p.value)}</span>
         </div>
       ))}
     </div>
@@ -276,23 +387,23 @@ function CustomTooltip({ active, payload, label }: any) {
 export default function Dashboard() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { clubs, selectedClubId } = useClub();
+  const { selectedClubId } = useClub();
 
-  const currentClub = clubs.find((c) => c.id === selectedClubId) ?? null;
 
-  // Defensa en profundidad — el router ya bloquea, pero por si acaso
+
   useEffect(() => {
-    if (user?.role !== 'owner') {
-      navigate('/', { replace: true });
-    }
+    if (user?.role !== 'owner') navigate('/', { replace: true });
   }, [user, navigate]);
 
+  const [mode, setMode] = useState<Mode>('combined');
   const [from, setFrom] = useState(isoMinus(29));
   const [to,   setTo]   = useState(todayISO());
-  const [data, setData] = useState<RevenueData | null>(null);
-  const [loading, setLoading]     = useState(false);
-  const [error, setError]         = useState('');
-  const [exporting, setExporting] = useState(false);
+
+  const [revenueData,    setRevenueData]    = useState<RevenueData | null>(null);
+  const [cashMovements,  setCashMovements]  = useState<CashMovement[]>([]);
+  const [loading,        setLoading]        = useState(false);
+  const [error,          setError]          = useState('');
+  const [exporting,      setExporting]      = useState(false);
 
   const rangeInvalid = !!from && !!to && from > to;
 
@@ -300,47 +411,68 @@ export default function Dashboard() {
     if (!from || !to || from > to || !selectedClubId) return;
     setLoading(true);
     setError('');
-    api.getRevenue(from, to, selectedClubId)
-      .then(setData)
+    Promise.all([
+      api.getRevenue(from, to, selectedClubId),
+      api.getCashMovements(selectedClubId, from, to),
+    ])
+      .then(([rev, cash]) => {
+        setRevenueData(rev);
+        setCashMovements(cash);
+      })
       .catch((e) => setError(e.message ?? 'Error al cargar datos'))
       .finally(() => setLoading(false));
   }, [from, to, selectedClubId]);
 
-  // ── derived stats ────────────────────────────────────────────────────────
+  // ── derived data ──────────────────────────────────────────────────────────
 
-  const grandTotal = data?.days.reduce((s, d) => s + d.total, 0) ?? 0;
+  const activeMeta = getMetaForMode(mode);
 
-  const totalByType: Record<TypeKey, number> = {
-    booking: 0, class: 0, challenge: 0, tournament: 0,
-  };
-
-  data?.days.forEach((d) => {
-    (Object.keys(totalByType) as TypeKey[]).forEach((k) => {
-      totalByType[k] += d.totals[k] ?? 0;
-    });
-  });
-
-  const chartData = data?.days.map((d) => ({
-    date: fmtDate(d.date),
-    ...d.totals,
-    total: d.total,
-  })) ?? [];
-
-  const bestDay = data?.days.reduce(
-    (best, d) => (d.total > best.total ? d : best),
-    { date: '-', total: 0 },
+  const unifiedDays = useMemo(
+    () => computeUnifiedDays(mode, revenueData, cashMovements),
+    [mode, revenueData, cashMovements],
   );
 
-  const avgPerDay = data?.days.length
-    ? grandTotal / data.days.filter((d) => d.total > 0).length || 0
-    : 0;
+  const grandTotal    = unifiedDays.reduce((s, d) => s + d.totalIncome, 0);
+  const grandExpenses = unifiedDays.reduce((s, d) => s + d.totalExpenses, 0);
+
+  const totalByCategory = useMemo(() => {
+    const acc: Record<string, number> = {};
+    for (const day of unifiedDays) {
+      for (const [k, v] of Object.entries(day.categories)) {
+        acc[k] = (acc[k] ?? 0) + v;
+      }
+    }
+    return acc;
+  }, [unifiedDays]);
+
+  const chartData = unifiedDays.map((d) => ({
+    date: fmtDate(d.date),
+    ...d.categories,
+    total: d.totalIncome,
+  }));
+
+  const bestDay = unifiedDays.reduce(
+    (best, d) => (d.totalIncome > best.totalIncome ? d : best),
+    { date: '-', totalIncome: 0, totalExpenses: 0, categories: {} } as UnifiedDay,
+  );
+
+  const activeDays = unifiedDays.filter((d) => d.totalIncome > 0).length;
+  const avgPerDay  = activeDays > 0 ? grandTotal / activeDays : 0;
+
+  const incomeCatKeys = Object.keys(activeMeta).filter((k) => !EXPENSE_KEYS.has(k));
+  const topCatKey = incomeCatKeys.length > 0
+    ? incomeCatKeys.reduce((a, b) => (totalByCategory[a] ?? 0) >= (totalByCategory[b] ?? 0) ? a : b)
+    : null;
 
   async function handleExportPDF() {
     if (!selectedClubId) return;
     setExporting(true);
     try {
-      const rows = await api.getReservationsReport(from, to, selectedClubId);
-      await generatePDF(from, to, grandTotal, totalByType, rows);
+      let reservationRows: ReservationReportRow[] = [];
+      if (mode === 'courts' || mode === 'combined') {
+        reservationRows = await api.getReservationsReport(from, to, selectedClubId);
+      }
+      await generatePDF(mode, from, to, grandTotal, totalByCategory, reservationRows, cashMovements);
     } catch (e: any) {
       setError(e.message ?? 'Error al generar el PDF');
     } finally {
@@ -348,133 +480,148 @@ export default function Dashboard() {
     }
   }
 
-  // ── render ───────────────────────────────────────────────────────────────
+  // ── render ────────────────────────────────────────────────────────────────
+
+  const catColCount = Object.keys(activeMeta).length + 2; // date + cats + total
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* ── header ── */}
-      <header className="bg-white border-b px-6 py-4 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => navigate('/')}
-            className="text-gray-400 hover:text-indigo-600 transition-colors p-1 rounded-lg hover:bg-indigo-50"
-            title="Volver al calendario"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-            </svg>
-          </button>
-          <div>
-            <h1 className="text-xl font-bold text-indigo-700 tracking-tight">
-              {currentClub ? currentClub.name : 'Ingresos'}
-            </h1>
-            <p className="text-xs text-gray-400">Reporte de ingresos</p>
+    <div className="min-h-full bg-gray-50 dark:bg-gray-900">
+      {/* ── Page header ── */}
+      <div className="bg-white dark:bg-gray-800 border-b border-gray-100 dark:border-gray-700 px-6 py-4">
+        <div className="flex items-center justify-between gap-4 flex-wrap">
+          <h1 className="text-xl font-bold text-gray-800 dark:text-gray-100">Ingresos</h1>
+
+          <div className="flex items-center gap-3 flex-wrap">
+            {/* date range */}
+            <div className={`flex items-center gap-2 border rounded-xl px-3 py-1.5 transition-colors ${
+              rangeInvalid
+                ? 'border-red-300 bg-red-50'
+                : 'border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700'
+            }`}>
+              <svg className="w-4 h-4 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                  d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              <div className="flex flex-col">
+                <label className="text-[10px] font-medium uppercase tracking-wide leading-none mb-0.5 text-gray-400">
+                  Desde
+                </label>
+                <input
+                  type="date" value={from} max={to || undefined}
+                  onChange={(e) => setFrom(e.target.value)}
+                  className={`bg-transparent text-sm focus:outline-none w-32 dark:text-gray-100 ${rangeInvalid ? 'text-red-600' : ''}`}
+                />
+              </div>
+              <span className="text-gray-300">→</span>
+              <div className="flex flex-col">
+                <label className="text-[10px] font-medium uppercase tracking-wide leading-none mb-0.5 text-gray-400">
+                  Hasta
+                </label>
+                <input
+                  type="date" value={to} min={from || undefined}
+                  onChange={(e) => setTo(e.target.value)}
+                  className="bg-transparent text-sm focus:outline-none w-32 dark:text-gray-100"
+                />
+              </div>
+            </div>
+
+            {/* quick ranges */}
+            <div className="hidden sm:flex gap-1">
+              {[
+                { label: '7d',  days: 6 },
+                { label: '30d', days: 29 },
+                { label: '90d', days: 89 },
+              ].map(({ label, days }) => (
+                <button
+                  key={label}
+                  onClick={() => { setFrom(isoMinus(days)); setTo(todayISO()); }}
+                  className="text-xs px-2.5 py-1.5 rounded-lg border border-gray-200 dark:border-gray-600
+                             text-gray-500 dark:text-gray-400 hover:border-indigo-400 hover:text-indigo-600
+                             hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-colors"
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            {/* export PDF */}
+            <button
+              onClick={handleExportPDF}
+              disabled={exporting || loading || rangeInvalid}
+              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border font-medium transition-colors
+                         disabled:opacity-50 disabled:cursor-not-allowed
+                         border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300
+                         bg-white dark:bg-gray-700 hover:border-gray-400 hover:bg-gray-50 dark:hover:bg-gray-600"
+            >
+              {exporting ? (
+                <>
+                  <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                  </svg>
+                  Generando…
+                </>
+              ) : (
+                <>
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                      d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                  </svg>
+                  Exportar PDF
+                </>
+              )}
+            </button>
           </div>
         </div>
+      </div>
 
-        {/* club selector + date range */}
-        <div className="flex items-center gap-3">
-          <ClubSelector />
-          <div className={`flex items-center gap-2 border rounded-xl px-3 py-1.5 transition-colors ${
-            rangeInvalid ? 'border-red-300 bg-red-50' : 'border-gray-200 bg-gray-50'
-          }`}>
-            <svg className="w-4 h-4 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-            </svg>
-            <div className="flex flex-col">
-              <label className="text-[10px] font-medium uppercase tracking-wide leading-none mb-0.5 text-gray-400">
-                Desde
-              </label>
-              <input
-                type="date" value={from} max={to || undefined}
-                onChange={(e) => setFrom(e.target.value)}
-                className={`bg-transparent text-sm focus:outline-none w-32 ${rangeInvalid ? 'text-red-600' : ''}`}
-              />
-            </div>
-            <span className="text-gray-300">→</span>
-            <div className="flex flex-col">
-              <label className="text-[10px] font-medium uppercase tracking-wide leading-none mb-0.5 text-gray-400">
-                Hasta
-              </label>
-              <input
-                type="date" value={to} min={from || undefined}
-                onChange={(e) => setTo(e.target.value)}
-                className="bg-transparent text-sm focus:outline-none w-32"
-              />
-            </div>
-          </div>
+      <div className="p-6 max-w-7xl mx-auto space-y-6">
 
-          {/* quick ranges */}
-          <div className="hidden sm:flex gap-1">
-            {[
-              { label: '7d',  days: 6 },
-              { label: '30d', days: 29 },
-              { label: '90d', days: 89 },
-            ].map(({ label, days }) => (
+        {/* ── mode selector ── */}
+        <div className="flex justify-center">
+          <div className="inline-flex rounded-xl border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 p-1 gap-1">
+            {([
+              { key: 'courts',   label: 'Alquileres' },
+              { key: 'cash',     label: 'Caja' },
+              { key: 'combined', label: 'Combinado' },
+            ] as const).map(({ key, label }) => (
               <button
-                key={label}
-                onClick={() => { setFrom(isoMinus(days)); setTo(todayISO()); }}
-                className="text-xs px-2.5 py-1.5 rounded-lg border border-gray-200 text-gray-500
-                           hover:border-indigo-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
+                key={key}
+                onClick={() => setMode(key)}
+                className={`px-5 py-1.5 text-sm font-medium rounded-lg transition-all ${
+                  mode === key
+                    ? 'bg-white dark:bg-slate-700 text-indigo-700 dark:text-indigo-400 shadow-sm border border-gray-200 dark:border-slate-600'
+                    : 'text-gray-500 dark:text-slate-400 hover:text-gray-700 dark:hover:text-slate-200'
+                }`}
               >
                 {label}
               </button>
             ))}
           </div>
-
-          {/* export button */}
-          <button
-            onClick={handleExportPDF}
-            disabled={exporting || loading || !data || rangeInvalid}
-            className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border font-medium transition-colors
-                       disabled:opacity-50 disabled:cursor-not-allowed
-                       border-gray-300 text-gray-600 bg-white hover:border-gray-400 hover:bg-gray-50"
-          >
-            {exporting ? (
-              <>
-                <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
-                </svg>
-                Generando…
-              </>
-            ) : (
-              <>
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                    d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                </svg>
-                Exportar PDF
-              </>
-            )}
-          </button>
         </div>
-      </header>
-
-      <main className="p-6 max-w-7xl mx-auto space-y-6">
 
         {/* ── no club selected ── */}
         {!selectedClubId && (
           <div className="flex flex-col items-center justify-center py-24 text-center gap-3">
-            <p className="text-lg font-semibold text-gray-700">Seleccioná un club para ver los ingresos</p>
-            <p className="text-sm text-gray-400">Usá el selector de club en la barra superior.</p>
+            <p className="text-lg font-semibold text-gray-700 dark:text-app-text">Seleccioná un club para ver los ingresos</p>
+            <p className="text-sm text-gray-400 dark:text-app-muted">Usá el selector de club en la barra superior.</p>
           </div>
         )}
 
         {/* ── errors ── */}
         {rangeInvalid && (
-          <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-3 text-sm">
+          <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 rounded-xl px-4 py-3 text-sm">
             La fecha &quot;Desde&quot; no puede ser mayor que &quot;Hasta&quot;
           </div>
         )}
         {error && !rangeInvalid && (
-          <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-3 text-sm">
+          <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 rounded-xl px-4 py-3 text-sm">
             {error}
           </div>
         )}
 
         {selectedClubId && (<>
+
         {/* ── KPI row ── */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {/* grand total */}
@@ -484,57 +631,61 @@ export default function Dashboard() {
             <p className="text-3xl font-extrabold tracking-tight">
               {loading ? '—' : fmtCurrency(grandTotal)}
             </p>
+            {grandExpenses > 0 && !loading && (
+              <p className="text-indigo-200 text-xs">
+                Egresos: {fmtCurrency(grandExpenses)} · Neto: {fmtCurrency(grandTotal - grandExpenses)}
+              </p>
+            )}
             <p className="text-indigo-200 text-xs mt-1">
-              {data?.days.length ?? 0} días · promedio {fmtCurrency(avgPerDay)}/día
+              {activeDays} días · promedio {fmtCurrency(avgPerDay)}/día
             </p>
           </div>
 
           {/* best day */}
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 flex flex-col gap-1">
-            <p className="text-gray-500 text-sm font-medium">Mejor día</p>
-            <p className="text-2xl font-bold text-gray-900">
-              {loading ? '—' : fmtCurrency(bestDay?.total ?? 0)}
+          <div className="bg-white dark:bg-app-card rounded-2xl shadow-sm border border-gray-100 dark:border-app-border p-5 flex flex-col gap-1">
+            <p className="text-gray-500 dark:text-app-muted text-sm font-medium">Mejor día</p>
+            <p className="text-2xl font-bold text-gray-900 dark:text-app-text">
+              {loading ? '—' : fmtCurrency(bestDay.totalIncome)}
             </p>
-            <p className="text-gray-400 text-xs">{bestDay?.date !== '-' ? bestDay?.date : 'Sin datos'}</p>
+            <p className="text-gray-400 dark:text-slate-500 text-xs">
+              {bestDay.date !== '-' ? fmtDate(bestDay.date) : 'Sin datos'}
+            </p>
           </div>
 
           {/* active days */}
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 flex flex-col gap-1">
-            <p className="text-gray-500 text-sm font-medium">Días con ingresos</p>
-            <p className="text-2xl font-bold text-gray-900">
-              {loading ? '—' : (data?.days.filter((d) => d.total > 0).length ?? 0)}
+          <div className="bg-white dark:bg-app-card rounded-2xl shadow-sm border border-gray-100 dark:border-app-border p-5 flex flex-col gap-1">
+            <p className="text-gray-500 dark:text-app-muted text-sm font-medium">Días con ingresos</p>
+            <p className="text-2xl font-bold text-gray-900 dark:text-app-text">
+              {loading ? '—' : activeDays}
             </p>
-            <p className="text-gray-400 text-xs">de {data?.days.length ?? 0} días en rango</p>
+            <p className="text-gray-400 dark:text-slate-500 text-xs">de {unifiedDays.length} días en rango</p>
           </div>
 
-          {/* top type */}
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 flex flex-col gap-1">
-            <p className="text-gray-500 text-sm font-medium">Categoría líder</p>
-            {loading ? <p className="text-2xl font-bold text-gray-900">—</p> : (() => {
-              const top = (Object.keys(totalByType) as TypeKey[]).reduce(
-                (a, b) => totalByType[a] >= totalByType[b] ? a : b
-              );
-              return (
-                <>
-                  <p className="text-2xl font-bold" style={{ color: TYPE_META[top].color }}>
-                    {TYPE_META[top].label}
-                  </p>
-                  <p className="text-gray-400 text-xs">{fmtCurrency(totalByType[top])}</p>
-                </>
-              );
-            })()}
+          {/* top category */}
+          <div className="bg-white dark:bg-app-card rounded-2xl shadow-sm border border-gray-100 dark:border-app-border p-5 flex flex-col gap-1">
+            <p className="text-gray-500 dark:text-app-muted text-sm font-medium">Categoría líder</p>
+            {loading || !topCatKey ? (
+              <p className="text-2xl font-bold text-gray-900 dark:text-app-text">—</p>
+            ) : (
+              <>
+                <p className="text-2xl font-bold" style={{ color: activeMeta[topCatKey].color }}>
+                  {activeMeta[topCatKey].label}
+                </p>
+                <p className="text-gray-400 dark:text-slate-500 text-xs">{fmtCurrency(totalByCategory[topCatKey] ?? 0)}</p>
+              </>
+            )}
           </div>
         </div>
 
-        {/* ── type cards ── */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          {(Object.keys(TYPE_META) as TypeKey[]).map((k) => (
+        {/* ── category cards ── */}
+        <div className={`grid gap-4 ${Object.keys(activeMeta).length <= 2 ? 'grid-cols-2' : 'grid-cols-2 lg:grid-cols-4'}`}>
+          {Object.keys(activeMeta).map((k) => (
             <StatCard
               key={k}
-              label={TYPE_META[k].label}
-              value={loading ? 0 : totalByType[k]}
-              color={TYPE_META[k].color}
-              pct={grandTotal > 0 ? (totalByType[k] / grandTotal) * 100 : 0}
+              label={activeMeta[k].label}
+              value={loading ? 0 : (totalByCategory[k] ?? 0)}
+              color={activeMeta[k].color}
+              pct={grandTotal > 0 ? ((totalByCategory[k] ?? 0) / grandTotal) * 100 : 0}
             />
           ))}
         </div>
@@ -543,12 +694,10 @@ export default function Dashboard() {
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
 
           {/* line chart */}
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-            <h2 className="text-base font-semibold text-gray-700 mb-4">Ingresos por día</h2>
+          <div className="bg-white dark:bg-app-card rounded-2xl shadow-sm border border-gray-100 dark:border-app-border p-6">
+            <h2 className="text-base font-semibold text-gray-700 dark:text-app-text mb-4">Ingresos por día</h2>
             {loading ? (
-              <div className="h-64 flex items-center justify-center text-gray-300 text-sm">
-                Cargando…
-              </div>
+              <div className="h-64 flex items-center justify-center text-gray-300 dark:text-slate-600 text-sm">Cargando…</div>
             ) : (
               <ResponsiveContainer width="100%" height={280}>
                 <LineChart data={chartData} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
@@ -559,17 +708,17 @@ export default function Dashboard() {
                     tick={{ fontSize: 11, fill: '#9ca3af' }}
                     tickLine={false} axisLine={false}
                   />
-                  <Tooltip content={<CustomTooltip />} />
+                  <Tooltip content={<CustomTooltip meta={activeMeta} />} />
                   <Legend
-                    formatter={(v) => TYPE_META[v as TypeKey]?.label ?? v}
+                    formatter={(v) => activeMeta[v]?.label ?? v}
                     wrapperStyle={{ fontSize: '12px' }}
                   />
-                  {(Object.keys(TYPE_META) as TypeKey[]).map((k) => (
+                  {Object.keys(activeMeta).map((k) => (
                     <Line
                       key={k}
                       type="monotone"
                       dataKey={k}
-                      stroke={TYPE_META[k].color}
+                      stroke={activeMeta[k].color}
                       strokeWidth={2}
                       dot={false}
                       activeDot={{ r: 4 }}
@@ -581,12 +730,10 @@ export default function Dashboard() {
           </div>
 
           {/* bar chart */}
-          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-            <h2 className="text-base font-semibold text-gray-700 mb-4">Mix de ingresos por día</h2>
+          <div className="bg-white dark:bg-app-card rounded-2xl shadow-sm border border-gray-100 dark:border-app-border p-6">
+            <h2 className="text-base font-semibold text-gray-700 dark:text-app-text mb-4">Mix de ingresos por día</h2>
             {loading ? (
-              <div className="h-64 flex items-center justify-center text-gray-300 text-sm">
-                Cargando…
-              </div>
+              <div className="h-64 flex items-center justify-center text-gray-300 dark:text-slate-600 text-sm">Cargando…</div>
             ) : (
               <ResponsiveContainer width="100%" height={280}>
                 <BarChart data={chartData} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
@@ -597,13 +744,19 @@ export default function Dashboard() {
                     tick={{ fontSize: 11, fill: '#9ca3af' }}
                     tickLine={false} axisLine={false}
                   />
-                  <Tooltip content={<CustomTooltip />} />
+                  <Tooltip content={<CustomTooltip meta={activeMeta} />} />
                   <Legend
-                    formatter={(v) => TYPE_META[v as TypeKey]?.label ?? v}
+                    formatter={(v) => activeMeta[v]?.label ?? v}
                     wrapperStyle={{ fontSize: '12px' }}
                   />
-                  {(Object.keys(TYPE_META) as TypeKey[]).map((k) => (
-                    <Bar key={k} dataKey={k} stackId="a" fill={TYPE_META[k].color} radius={k === 'tournament' ? [4, 4, 0, 0] : undefined} />
+                  {Object.keys(activeMeta).map((k, i, arr) => (
+                    <Bar
+                      key={k}
+                      dataKey={k}
+                      stackId="a"
+                      fill={activeMeta[k].color}
+                      radius={i === arr.length - 1 ? [4, 4, 0, 0] : undefined}
+                    />
                   ))}
                 </BarChart>
               </ResponsiveContainer>
@@ -612,42 +765,51 @@ export default function Dashboard() {
         </div>
 
         {/* ── daily table ── */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-          <div className="px-6 py-4 border-b border-gray-50">
-            <h2 className="text-base font-semibold text-gray-700">Detalle por día</h2>
+        <div className="bg-white dark:bg-app-card rounded-2xl shadow-sm border border-gray-100 dark:border-app-border overflow-hidden">
+          <div className="px-6 py-4 border-b border-gray-100 dark:border-app-border">
+            <h2 className="text-base font-semibold text-gray-700 dark:text-app-text">Detalle por día</h2>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="text-xs text-gray-400 uppercase tracking-wide bg-gray-50">
+                <tr className="text-xs text-gray-400 dark:text-app-muted uppercase tracking-wide bg-gray-50 dark:bg-slate-700/50">
                   <th className="px-6 py-3 text-left font-medium">Fecha</th>
-                  {(Object.keys(TYPE_META) as TypeKey[]).map((k) => (
-                    <th key={k} className="px-6 py-3 text-right font-medium" style={{ color: TYPE_META[k].color }}>
-                      {TYPE_META[k].label}
+                  {Object.keys(activeMeta).map((k) => (
+                    <th key={k} className="px-6 py-3 text-right font-medium" style={{ color: activeMeta[k].color }}>
+                      {activeMeta[k].label}
                     </th>
                   ))}
-                  <th className="px-6 py-3 text-right font-medium text-gray-600">Total</th>
+                  <th className="px-6 py-3 text-right font-medium text-gray-600 dark:text-slate-300">Ingresos</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-50">
+              <tbody className="divide-y divide-gray-100 dark:divide-app-border">
                 {loading ? (
-                  <tr><td colSpan={6} className="px-6 py-8 text-center text-gray-300">Cargando…</td></tr>
-                ) : data?.days.filter((d) => d.total > 0).length === 0 ? (
-                  <tr><td colSpan={6} className="px-6 py-8 text-center text-gray-300">Sin ingresos en el rango seleccionado</td></tr>
+                  <tr>
+                    <td colSpan={catColCount} className="px-6 py-8 text-center text-gray-300 dark:text-slate-600">Cargando…</td>
+                  </tr>
+                ) : unifiedDays.filter((d) => d.totalIncome > 0 || d.totalExpenses > 0).length === 0 ? (
+                  <tr>
+                    <td colSpan={catColCount} className="px-6 py-8 text-center text-gray-300 dark:text-slate-600">
+                      Sin datos en el rango seleccionado
+                    </td>
+                  </tr>
                 ) : (
-                  data?.days
-                    .filter((d) => d.total > 0)
+                  unifiedDays
+                    .filter((d) => d.totalIncome > 0 || d.totalExpenses > 0)
+                    .slice()
                     .sort((a, b) => b.date.localeCompare(a.date))
                     .map((d) => (
-                      <tr key={d.date} className="hover:bg-gray-50 transition-colors">
-                        <td className="px-6 py-3 font-medium text-gray-700">{d.date}</td>
-                        {(Object.keys(TYPE_META) as TypeKey[]).map((k) => (
-                          <td key={k} className="px-6 py-3 text-right text-gray-600">
-                            {d.totals[k] > 0 ? fmtCurrency(d.totals[k]) : <span className="text-gray-200">—</span>}
+                      <tr key={d.date} className="hover:bg-gray-50 dark:hover:bg-slate-700/30 transition-colors">
+                        <td className="px-6 py-3 font-medium text-gray-700 dark:text-app-text">{fmtDate(d.date)}</td>
+                        {Object.keys(activeMeta).map((k) => (
+                          <td key={k} className="px-6 py-3 text-right text-gray-600 dark:text-slate-300">
+                            {(d.categories[k] ?? 0) > 0
+                              ? fmtCurrency(d.categories[k])
+                              : <span className="text-gray-200 dark:text-slate-700">—</span>}
                           </td>
                         ))}
-                        <td className="px-6 py-3 text-right font-semibold text-gray-900">
-                          {fmtCurrency(d.total)}
+                        <td className="px-6 py-3 text-right font-semibold text-gray-900 dark:text-app-text">
+                          {fmtCurrency(d.totalIncome)}
                         </td>
                       </tr>
                     ))
@@ -655,14 +817,14 @@ export default function Dashboard() {
               </tbody>
               {!loading && grandTotal > 0 && (
                 <tfoot>
-                  <tr className="bg-indigo-50 border-t border-indigo-100 font-semibold">
-                    <td className="px-6 py-3 text-indigo-700">Total</td>
-                    {(Object.keys(TYPE_META) as TypeKey[]).map((k) => (
-                      <td key={k} className="px-6 py-3 text-right" style={{ color: TYPE_META[k].color }}>
-                        {fmtCurrency(totalByType[k])}
+                  <tr className="bg-indigo-50 dark:bg-indigo-900/30 border-t border-indigo-100 dark:border-indigo-900 font-semibold">
+                    <td className="px-6 py-3 text-indigo-700 dark:text-indigo-300">Total</td>
+                    {Object.keys(activeMeta).map((k) => (
+                      <td key={k} className="px-6 py-3 text-right" style={{ color: activeMeta[k].color }}>
+                        {fmtCurrency(totalByCategory[k] ?? 0)}
                       </td>
                     ))}
-                    <td className="px-6 py-3 text-right text-indigo-700">{fmtCurrency(grandTotal)}</td>
+                    <td className="px-6 py-3 text-right text-indigo-700 dark:text-indigo-300">{fmtCurrency(grandTotal)}</td>
                   </tr>
                 </tfoot>
               )}
@@ -671,7 +833,7 @@ export default function Dashboard() {
         </div>
 
         </>)}
-      </main>
+      </div>
     </div>
   );
 }

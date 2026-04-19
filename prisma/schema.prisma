@@ -61,6 +61,8 @@ model Club {
   invitations    Invitation[]
   memberships    Membership[]
   cashMovements  CashMovement[]
+  products       Product[]
+  movements      Movement[]
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
 }
@@ -122,6 +124,31 @@ model FixedReservation {
   createdAt     DateTime  @default(now())
 }
 
+model Product {
+  id              Int              @id @default(autoincrement())
+  name            String
+  salePrice       Decimal          @db.Decimal(10, 2)
+  purchasePrice   Decimal          @default(0) @db.Decimal(10, 2)
+  stock           Int              @default(0)
+  clubId          Int
+  club            Club             @relation(fields: [clubId], references: [id])
+  cashMovements   CashMovement[]
+  stockMovements  StockMovement[]
+  movements       Movement[]
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+}
+
+model StockMovement {
+  id        Int      @id @default(autoincrement())
+  productId Int
+  quantity  Int      // negative = sale, positive = restock
+  type      String   // "sale" | "restock"
+  createdAt DateTime @default(now())
+
+  product   Product  @relation(fields: [productId], references: [id])
+}
+
 model CashMovement {
   id                   Int      @id @default(autoincrement())
   clubId               Int
@@ -132,7 +159,24 @@ model CashMovement {
   paymentMethod        String
   relatedReservationId Int?
   fixedReservationId   Int?
+  relatedProductId     Int?
+  product              Product? @relation(fields: [relatedProductId], references: [id])
   createdAt            DateTime @default(now())
+}
+
+model Movement {
+  id            Int      @id @default(autoincrement())
+  clubId        Int
+  club          Club     @relation(fields: [clubId], references: [id])
+  type          String   // "sale" | "manual"
+  amount        Decimal  @db.Decimal(10, 2)
+  description   String
+  productId     Int?
+  product       Product? @relation(fields: [productId], references: [id])
+  quantity      Int?
+  status        String   @default("active") // "active" | "cancelled"
+  paymentMethod String   @default("cash")   // "cash" | "mercadopago"
+  createdAt     DateTime @default(now())
 }
 
 model Reservation {

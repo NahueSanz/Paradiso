@@ -115,17 +115,17 @@ function cellStyle(entry: ScheduleEntry): string {
     if (entry.paymentStatus === 'paid') {
       return 'bg-emerald-500 hover:bg-emerald-600 border-emerald-600 text-white border-dashed cursor-pointer';
     }
-    return 'bg-purple-100 border-purple-400 text-purple-900 border-dashed hover:bg-purple-200 cursor-pointer';
+    return 'bg-purple-100 dark:bg-purple-900/30 border-purple-400 dark:border-purple-600 text-purple-900 dark:text-purple-200 border-dashed hover:bg-purple-200 dark:hover:bg-purple-900/50 cursor-pointer';
   }
   const r = entry as Reservation;
   if (r.paymentStatus === 'paid')    return 'bg-emerald-500 hover:bg-emerald-600 border-emerald-600 text-white border-solid';
-  if (r.paymentStatus === 'partial') return 'bg-orange-200  hover:bg-orange-300  border-orange-400  text-orange-900 border-solid';
-  return                                    'bg-amber-100   hover:bg-amber-200   border-amber-400   text-amber-900  border-solid';
+  if (r.paymentStatus === 'partial') return 'bg-orange-200 dark:bg-orange-900/40 hover:bg-orange-300 dark:hover:bg-orange-900/60 border-orange-400 dark:border-orange-600 text-orange-900 dark:text-orange-200 border-solid';
+  return                                    'bg-amber-100 dark:bg-amber-900/30 hover:bg-amber-200 dark:hover:bg-amber-900/50 border-amber-400 dark:border-amber-600 text-amber-900 dark:text-amber-200 border-solid';
 }
 
 // ── Cell ──────────────────────────────────────────────────────────────────────
 
-const EMPTY_STYLE = 'bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-400 border-solid';
+const EMPTY_STYLE = 'bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border-slate-200 dark:border-slate-600 text-slate-400 dark:text-slate-500 border-solid';
 
 interface CellProps {
   entry: ScheduleEntry | undefined;
@@ -167,7 +167,7 @@ function Cell({ entry, onClick }: CellProps) {
           <span className="font-bold truncate text-[13px]">{entry.clientName}</span>
           {fixed && (
             <span className="shrink-0 text-[9px] font-bold uppercase tracking-wide
-                             bg-purple-200 text-purple-700 border border-purple-300
+                             bg-purple-200 dark:bg-purple-900/50 text-purple-700 dark:text-purple-300 border border-purple-300 dark:border-purple-700
                              px-1.5 py-px rounded-full leading-none">
               Fijo
             </span>
@@ -284,7 +284,7 @@ export default function ScheduleGrid({
 
   if (error) {
     return (
-      <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-4 py-2">
+      <p className="text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg px-4 py-2">
         {error}
       </p>
     );
@@ -293,9 +293,9 @@ export default function ScheduleGrid({
   if (courts.length === 0) {
     return (
       <div className="text-center py-16">
-        <p className="text-gray-400">No hay canchas disponibles.</p>
+        <p className="text-slate-400 dark:text-slate-500">No hay canchas disponibles.</p>
         {isOwner && (
-          <p className="text-sm text-gray-400 mt-1">
+          <p className="text-sm text-slate-400 dark:text-slate-500 mt-1">
             Usá el botón <strong>"Agregar cancha"</strong> para crear la primera.
           </p>
         )}
@@ -334,18 +334,18 @@ export default function ScheduleGrid({
 
   return (
     <>
-      <div className="overflow-x-auto rounded-lg border border-gray-100">
+      <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-700">
         <table className="min-w-full border-separate border-spacing-1">
           <thead>
             <tr>
               {/* Sticky time header */}
-              <th className="sticky left-0 z-20 bg-white w-14 text-xs text-gray-400 font-normal text-right pr-2">
+              <th className="sticky left-0 z-20 bg-white dark:bg-slate-900 w-14 text-xs text-slate-400 dark:text-slate-500 font-normal text-right pr-2">
                 Hora
               </th>
               {courts.map((court) => (
                 <th
                   key={court.id}
-                  className={`${colWidth} text-sm font-semibold text-center text-gray-700 pb-1 group`}
+                  className={`${colWidth} text-sm font-semibold text-center text-slate-700 dark:text-slate-200 pb-1 group`}
                 >
                   <div className="flex items-center justify-center gap-0.5">
                     <span className="truncate">{court.name}</span>
@@ -360,7 +360,7 @@ export default function ScheduleGrid({
                             }}
                             title={`Renombrar ${court.name}`}
                             className="opacity-0 group-hover:opacity-100 transition-opacity ml-0.5 p-0.5 rounded
-                                       text-gray-300 hover:text-indigo-500 hover:bg-indigo-50"
+                                       text-slate-300 dark:text-slate-600 hover:text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-900/30"
                           >
                             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
@@ -373,7 +373,7 @@ export default function ScheduleGrid({
                             onClick={() => setPendingDelete(court)}
                             title={`Eliminar ${court.name}`}
                             className="opacity-0 group-hover:opacity-100 transition-opacity ml-0.5 p-0.5 rounded
-                                       text-gray-300 hover:text-red-500 hover:bg-red-50"
+                                       text-slate-300 dark:text-slate-600 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30"
                           >
                             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
@@ -392,7 +392,7 @@ export default function ScheduleGrid({
             {SLOTS.map((slot) => (
               <tr key={slot}>
                 {/* Sticky time cell */}
-                <td className="sticky left-0 z-10 bg-white text-xs text-gray-400 text-right pr-2 align-top pt-1 whitespace-nowrap shadow-[1px_0_0_0_#f1f5f9]">
+                <td className="sticky left-0 z-10 bg-white dark:bg-slate-900 text-xs text-slate-400 dark:text-slate-500 text-right pr-2 align-top pt-1 whitespace-nowrap shadow-[1px_0_0_0_#e2e8f0] dark:shadow-[1px_0_0_0_#334155]">
                   {slot}
                 </td>
                 {courts.map((court) => {
@@ -426,9 +426,9 @@ export default function ScheduleGrid({
       {/* ── Delete Court Modal ── */}
       {pendingDelete && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6">
-            <h2 className="text-lg font-bold text-gray-800 mb-2">Eliminar cancha</h2>
-            <p className="text-sm text-gray-500 mb-6">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6">
+            <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-2">Eliminar cancha</h2>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">
               ¿Estás seguro? Esta acción no se puede deshacer.
             </p>
             <div className="flex gap-2">
@@ -436,8 +436,8 @@ export default function ScheduleGrid({
                 type="button"
                 onClick={() => setPendingDelete(null)}
                 disabled={deletingCourt}
-                className="flex-1 px-4 py-2 text-sm rounded-lg border border-gray-200 text-gray-600
-                           hover:bg-gray-50 disabled:opacity-50 transition-colors"
+                className="flex-1 px-4 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300
+                           hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 transition-colors"
               >
                 Cancelar
               </button>
@@ -458,28 +458,29 @@ export default function ScheduleGrid({
       {/* ── Rename Court Modal ── */}
       {pendingRename && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6">
-            <h2 className="text-lg font-bold text-gray-800 mb-4">Renombrar cancha</h2>
+          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6">
+            <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-4">Renombrar cancha</h2>
             <form onSubmit={confirmRename} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Nombre</label>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Nombre</label>
                 <input
                   ref={renameInputRef}
                   type="text"
                   value={renameValue}
                   onChange={(e) => setRenameValue(e.target.value)}
-                  className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none
-                             focus:ring-2 focus:ring-indigo-400"
+                  className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm
+                             bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100
+                             focus:outline-none focus:ring-2 focus:ring-indigo-400"
                 />
-                {renameError && <p className="text-xs text-red-600 mt-1">{renameError}</p>}
+                {renameError && <p className="text-xs text-red-600 dark:text-red-400 mt-1">{renameError}</p>}
               </div>
               <div className="flex gap-2">
                 <button
                   type="button"
                   onClick={() => setPendingRename(null)}
                   disabled={renameSaving}
-                  className="flex-1 px-4 py-2 text-sm rounded-lg border border-gray-200 text-gray-600
-                             hover:bg-gray-50 disabled:opacity-50 transition-colors"
+                  className="flex-1 px-4 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300
+                             hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 transition-colors"
                 >
                   Cancelar
                 </button>

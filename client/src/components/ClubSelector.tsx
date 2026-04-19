@@ -127,14 +127,13 @@ export default function ClubSelector() {
         {isOwner && (
           <button
             onClick={() => setShowModal(true)}
-            className="flex items-center gap-1.5 text-sm font-medium text-indigo-600
-                       hover:text-indigo-700 px-3 py-1.5 rounded-lg border border-indigo-200
-                       hover:bg-indigo-50 transition-colors"
+            title="Crear club"
+            className="flex items-center justify-center w-7 h-7 text-indigo-500 hover:text-indigo-700
+                       rounded-lg border border-indigo-200 hover:bg-indigo-50 transition-colors shrink-0"
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
             </svg>
-            Crear club
           </button>
         )}
       </div>
