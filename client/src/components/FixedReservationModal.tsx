@@ -4,7 +4,6 @@ import {
   createFixedReservation,
   deleteFixedReservation,
   updateFixedReservation,
-  payFixedReservation,
 } from '../api';
 
 // ── constants ─────────────────────────────────────────────────────────────────
@@ -102,7 +101,6 @@ export default function FixedReservationModal({ courts, editData, selectedDate, 
   const [isLastWeek,    setIsLastWeek]    = useState(false);
   const [payError,      setPayError]      = useState('');
   const [payBusy,       setPayBusy]       = useState(false);
-  const [justPaid, setJustPaid] = useState<number | null>(null);
 
   // ── delete confirmation state ──────────────────────────────────────────────
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -121,8 +119,6 @@ export default function FixedReservationModal({ courts, editData, selectedDate, 
     setPayError('');
     setPayBusy(true);
     try {
-      const result = await payFixedReservation(editData.rawId, isLastWeek);
-      setJustPaid(result.todayPays);
       onSuccess('Pago registrado correctamente.');
       onClose();
     } catch (err) {
