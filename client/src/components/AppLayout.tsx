@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import {
-  Menu, LogOut, BarChart2, Wallet, Package, ShoppingCart, Pencil, Calendar, Moon, Sun,
+  Menu, LogOut, BarChart2, Wallet, Package, ShoppingCart, Pencil, Calendar, Moon, Sun, Settings,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -37,6 +37,7 @@ const NAV_ITEMS: NavItem[] = [
   { to: '/cash',      label: 'Caja',             Icon: Wallet,       ownerOnly: true },
   { to: '/sell',      label: 'Vender productos', Icon: ShoppingCart, ownerOnly: true },
   { to: '/stock',     label: 'Stock',            Icon: Package,      ownerOnly: true },
+  { to: '/settings',  label: 'Configuración',    Icon: Settings,     ownerOnly: true },
 ];
 
 function navLinkClass({ isActive }: { isActive: boolean }) {
@@ -70,10 +71,10 @@ export default function AppLayout({ children, onRenameClub, onShowProfile }: App
   const visibleItems = NAV_ITEMS.filter((item) => !item.ownerOnly || isOwner);
 
   return (
-    <div className="flex h-screen bg-slate-50 dark:bg-slate-900 overflow-hidden">
+    <div className="flex h-screen bg-slate-50 dark:bg-slate-900">
 
       {/* ── Desktop Sidebar ── */}
-      <aside className="hidden md:flex flex-col w-60 shrink-0 bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 h-screen sticky top-0">
+      <aside className="hidden md:flex flex-col w-64 shrink-0 bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 z-40">
 
         {/* Club name */}
         <div className="px-4 py-4 border-b border-slate-200 dark:border-slate-700">

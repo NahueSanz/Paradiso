@@ -152,7 +152,7 @@ export async function getFixedReservationsByDateAndCourt(
   courtId: number,
 ): Promise<FixedReservationView[]> {
   const [year, month, day] = date.split('-').map(Number);
-  const dayOfWeek = new Date(year, month - 1, day).getDay();
+  const dayOfWeek = new Date(Date.UTC(year, month - 1, day)).getUTCDay();
 
   const records = await prisma.fixedReservation.findMany({
     where: { active: true, dayOfWeek, courtId },
@@ -203,6 +203,7 @@ export async function getFixedReservationsByClub(
       timeEnd: computeTimeEnd(r.timeStart, r.duration),
       duration: r.duration,
       clientName: r.clientName,
+      clientPhone: r.clientPhone ?? null,
       type: r.type,
       totalPrice: r.totalPrice != null ? String(r.totalPrice) : null,
       depositAmount: r.depositAmount != null ? String(r.depositAmount) : null,
@@ -223,6 +224,7 @@ export interface CreateFixedReservationInput {
   timeStart: string;
   duration: number;
   clientName: string;
+  clientPhone?: string | null;
   type: string;
   totalPrice?: number | null;
   depositAmount?: number | null;
@@ -232,7 +234,7 @@ export async function createFixedReservation(
   input: CreateFixedReservationInput,
   userId: number,
 ) {
-  const { courtId, dayOfWeek, timeStart, duration, clientName, type, totalPrice, depositAmount } = input;
+  const { courtId, dayOfWeek, timeStart, duration, clientName, clientPhone, type, totalPrice, depositAmount } = input;
 
   // Auth: user must be a member of the court's club
   await assertClubMembership(courtId, userId);
@@ -259,6 +261,7 @@ export async function createFixedReservation(
       timeStart,
       duration,
       clientName,
+      ...(clientPhone   != null ? { clientPhone }   : {}),
       type,
       ...(totalPrice    != null ? { totalPrice }    : {}),
       ...(depositAmount != null ? { depositAmount } : {}),
@@ -269,6 +272,7 @@ export async function createFixedReservation(
 
 export interface UpdateFixedReservationInput {
   clientName: string;
+  clientPhone?: string | null;
   timeStart: string;
   duration: number;
   type: string;
@@ -290,7 +294,7 @@ export async function updateFixedReservation(
   // Auth: user must be a member of the court's club
   await assertClubMembership(existing.courtId, userId);
 
-  const { clientName, timeStart, duration, type, totalPrice, depositAmount } = input;
+  const { clientName, clientPhone, timeStart, duration, type, totalPrice, depositAmount } = input;
 
   const proposedStart = toMinutes(timeStart);
   const proposedEnd = proposedStart + duration;
@@ -315,6 +319,7 @@ export async function updateFixedReservation(
     where: { id },
     data: {
       clientName,
+      clientPhone:   clientPhone   !== undefined ? clientPhone   : null,
       timeStart,
       duration,
       type,
@@ -383,57 +388,74 @@ export async function processFixedPayment(
   userId: number,
   paymentMethod = 'cash',
 ): Promise<ProcessPaymentResult> {
-  const fr = await prisma.fixedReservation.findUnique({ where: { id } });
-  if (!fr) throw new AppError('Fixed reservation not found', 404);
+  // Auth check outside the transaction — pure reads, no mutation risk.
+  const frForAuth = await prisma.fixedReservation.findUnique({
+    where:  { id },
+    select: { courtId: true },
+  });
+  if (!frForAuth) throw new AppError('Fixed reservation not found', 404);
+  const clubId = await assertClubMembership(frForAuth.courtId, userId);
 
-  const clubId = await assertClubMembership(fr.courtId, userId);
   const today = new Date();
   today.setUTCHours(0, 0, 0, 0);
-  const pricePerSlot  = Number(fr.totalPrice    ?? 0);
-  const depositAmount = Number(fr.depositAmount  ?? 0);
-  const currentCarry = Number(fr.carryOver ?? 0);
+  const todayStr = today.toISOString().slice(0, 10);
 
-  const paidToday = fr.lastPaidAt
-    ? fr.lastPaidAt.toISOString().slice(0, 10) === today.toISOString().slice(0, 10)
-    : false;
+  // All mutations run inside a single transaction so concurrent payment
+  // requests cannot both create a cash movement for the same day.
+  return prisma.$transaction(async (tx) => {
+    // Re-read inside the transaction to get a consistent snapshot.
+    const fr = await tx.fixedReservation.findUniqueOrThrow({ where: { id } });
 
-  let todayPays: number;
-  let newCarryOver: number;
+    const pricePerSlot  = Number(fr.totalPrice    ?? 0);
+    const depositAmount = Number(fr.depositAmount  ?? 0);
+    const currentCarry  = Number(fr.carryOver      ?? 0);
 
-  if (paidToday) {
-    todayPays    = 0;
-    newCarryOver = currentCarry;
-  } else if (isLastWeek) {
-    todayPays    = pricePerSlot - currentCarry;
-    newCarryOver = 0;
-  } else {
-    todayPays    = pricePerSlot;
-    newCarryOver = currentCarry;
-  }
-  
-  await prisma.fixedReservation.update({
-    where: { id },
-    data:  { carryOver: newCarryOver, lastPaidAt: today },
+    const paidToday = fr.lastPaidAt
+      ? fr.lastPaidAt.toISOString().slice(0, 10) === todayStr
+      : false;
+
+    let todayPays: number;
+    let newCarryOver: number;
+
+    if (paidToday) {
+      todayPays    = 0;
+      newCarryOver = currentCarry;
+    } else if (isLastWeek) {
+      todayPays    = pricePerSlot - currentCarry;
+      newCarryOver = 0;
+    } else {
+      todayPays    = pricePerSlot;
+      newCarryOver = currentCarry;
+    }
+
+    if (!paidToday) {
+      await tx.fixedReservation.update({
+        where: { id },
+        data:  { carryOver: newCarryOver, lastPaidAt: today },
+      });
+
+      if (pricePerSlot > 0) {
+        await tx.cashMovement.create({
+          data: {
+            clubId,
+            type:               'income',
+            concept:            `Turno fijo - ${fr.clientName}`,
+            amount:             todayPays,
+            paymentMethod,
+            fixedReservationId: id,
+          },
+        });
+      }
+    }
+
+    return {
+      id,
+      carryOver:      String(newCarryOver),
+      todayPays,
+      pricePerSlot,
+      depositAmount,
+      isLastWeek,
+      paidAt: todayStr,
+    };
   });
-
-  if (!paidToday && pricePerSlot > 0) {
-    await createCashMovement({
-      clubId,
-      type: 'income',
-      concept: `Turno fijo - ${fr.clientName}`,
-      amount: pricePerSlot,
-      paymentMethod,
-      fixedReservationId: id,
-    });
-  }
-
-  return {
-    id,
-    carryOver:      String(newCarryOver),
-    todayPays,
-    pricePerSlot,
-    depositAmount,
-    isLastWeek,
-    paidAt: today.toISOString().slice(0, 10),
-  };
 }

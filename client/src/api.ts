@@ -11,6 +11,7 @@ export interface ScheduleFixedReservation {
   timeEnd: string;            // "HH:MM"
   duration: number;
   clientName: string;
+  clientPhone: string | null;
   type: string | null;
   totalPrice: string | null;
   depositAmount: string | null;
@@ -100,6 +101,7 @@ export interface CreateReservationPayload {
   timeStart: string;
   timeEnd: string;
   clientName: string;
+  clientPhone?: string | null;
   type?: string;
   totalPrice?: number;
   depositAmount?: number;
@@ -111,6 +113,7 @@ export function createReservation(data: CreateReservationPayload): Promise<Reser
 
 export interface UpdateReservationPayload {
   clientName?: string;
+  clientPhone?: string | null;
   type?: string | null;
   totalPrice?: number | null;
   depositAmount?: number | null;
@@ -125,6 +128,22 @@ export function updateReservation(id: number, data: UpdateReservationPayload): P
 
 export function deleteReservation(id: number): Promise<void> {
   return request(`/reservations/${id}`, { method: 'DELETE' });
+}
+
+export function payReservation(id: number, amount: number): Promise<Reservation> {
+  return request(`/reservations/${id}/pay`, {
+    method: 'POST',
+    body: JSON.stringify({ amount }),
+    headers: clubIdHeader(),
+  });
+}
+
+export function updateReservationNote(id: number, internalNote: string | null): Promise<Reservation> {
+  return request(`/reservations/${id}/note`, {
+    method: 'PATCH',
+    body: JSON.stringify({ internalNote }),
+    headers: clubIdHeader(),
+  });
 }
 
 export interface DayRevenue {
@@ -171,6 +190,7 @@ export interface CreateFixedReservationPayload {
   timeStart: string; // "HH:MM"
   duration: number;  // positive integer (minutes)
   clientName: string;
+  clientPhone?: string | null;
   type?: string;
   totalPrice?: number;
   depositAmount?: number;
@@ -188,6 +208,7 @@ export function getFixedReservations(clubId: number): Promise<FixedReservation[]
 
 export interface UpdateFixedReservationPayload {
   clientName: string;
+  clientPhone?: string | null;
   timeStart: string;
   duration: number;
   type?: string | null;
@@ -369,8 +390,11 @@ export interface CreateSaleMovementPayload {
   paymentMethod: 'cash' | 'mercadopago';
 }
 
-export function getMovements(clubId: number): Promise<Movement[]> {
-  return request(`/movements?clubId=${clubId}`);
+export function getMovements(clubId: number, from?: string, to?: string): Promise<Movement[]> {
+  const params = new URLSearchParams({ clubId: String(clubId) });
+  if (from) params.set('from', from);
+  if (to) params.set('to', to);
+  return request(`/movements?${params}`);
 }
 
 export function createManualMovement(data: CreateManualMovementPayload): Promise<Movement> {
@@ -387,4 +411,52 @@ export function cancelMovement(id: number): Promise<Movement> {
 
 export function deleteMovement(id: number): Promise<void> {
   return request(`/movements/${id}`, { method: 'DELETE', headers: clubIdHeader() });
+}
+
+// ── Opening Hours ─────────────────────────────────────────────────────────────
+
+export interface OpeningHoursResult {
+  openTime:   string;  // "HH:mm"
+  closeTime:  string;  // "HH:mm"
+  isOverride: boolean;
+}
+
+export interface DaySchedule {
+  dayOfWeek: number;   // 0=Sun … 6=Sat
+  openTime:  string;   // "HH:mm"
+  closeTime: string;   // "HH:mm"
+}
+
+export function getOpeningHours(clubId: number, date: string): Promise<OpeningHoursResult> {
+  return request(`/opening-hours?clubId=${clubId}&date=${date}`);
+}
+
+export function getWeeklyDefaults(clubId: number): Promise<(DaySchedule | null)[]> {
+  return request(`/opening-hours/default?clubId=${clubId}`);
+}
+
+export function updateDefaultHours(clubId: number, schedule: DaySchedule[]): Promise<{ ok: boolean }> {
+  return request('/opening-hours/default', {
+    method: 'PUT',
+    body: JSON.stringify({ clubId, schedule }),
+  });
+}
+
+export function updateDateHours(
+  clubId: number,
+  date: string,
+  openTime: string,
+  closeTime: string,
+): Promise<{ ok: boolean }> {
+  return request('/opening-hours/date', {
+    method: 'PUT',
+    body: JSON.stringify({ clubId, date, openTime, closeTime }),
+  });
+}
+
+export function deleteDateHours(clubId: number, date: string): Promise<{ ok: boolean }> {
+  return request('/opening-hours/date', {
+    method: 'DELETE',
+    body: JSON.stringify({ clubId, date }),
+  });
 }

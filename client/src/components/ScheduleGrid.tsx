@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { getSchedule } from '../api';
 import type {
   Court,
@@ -9,69 +9,44 @@ import type {
 } from '../types';
 import type { ScheduleFixedReservation } from '../api';
 
-// Club hours: 09:00 → 01:00 (next day) — 32 half-hour slots
-// Post-midnight hours (00:xx, 01:xx) are treated as virtual minutes > 1440
-// so all comparisons remain monotonically increasing.
-const OPEN_VIRTUAL  = 9 * 60;        // 540  → 09:00
-const CLOSE_VIRTUAL = 25 * 60;       // 1500 → 01:00 next day
-const NUM_SLOTS     = (CLOSE_VIRTUAL - OPEN_VIRTUAL) / 30; // 32
-
-const SLOTS: TimeSlot[] = Array.from({ length: NUM_SLOTS }, (_, i) => {
-  const virtual = OPEN_VIRTUAL + i * 30;
-  const real    = virtual % (24 * 60);
-  const h = Math.floor(real / 60);
-  const m = real % 60;
-  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
-});
-
 // ── helpers ───────────────────────────────────────────────────────────────────
 
-/**
- * Parses both ISO datetime strings ("1970-01-01T09:00:00.000Z")
- * and plain "HH:MM" strings into virtual minutes.
- */
-function toVirtualMinutes(timeStr: string): number {
+function toVirtualMinutes(timeStr: string, openVirtual: number): number {
   const isISO = timeStr.length > 5;
   const h     = parseInt(isISO ? timeStr.slice(11, 13) : timeStr.slice(0, 2), 10);
   const m     = parseInt(isISO ? timeStr.slice(14, 16) : timeStr.slice(3, 5), 10);
   const raw   = h * 60 + m;
-  return raw < OPEN_VIRTUAL ? raw + 24 * 60 : raw;
+  return raw < openVirtual ? raw + 24 * 60 : raw;
 }
 
-/** Convert HH:MM slot label to virtual minutes. */
-function slotToVirtualMinutes(slot: TimeSlot): number {
+function slotToVirtualMinutes(slot: TimeSlot, openVirtual: number): number {
   const [h, m] = slot.split(':').map(Number);
   const raw    = h * 60 + m;
-  return raw < OPEN_VIRTUAL ? raw + 24 * 60 : raw;
+  return raw < openVirtual ? raw + 24 * 60 : raw;
 }
 
-/**
- * Returns "HH:MM" from either ISO datetime or plain "HH:MM".
- */
 function toHHMM(timeStr: string): string {
   return timeStr.length > 5 ? timeStr.slice(11, 16) : timeStr.slice(0, 5);
 }
 
 type HasTimes = { timeStart: string; timeEnd: string };
 
-function coversSlot(r: HasTimes, slot: TimeSlot): boolean {
-  const slotStart = slotToVirtualMinutes(slot);
+function coversSlot(r: HasTimes, slot: TimeSlot, openVirtual: number): boolean {
+  const slotStart = slotToVirtualMinutes(slot, openVirtual);
   const slotEnd   = slotStart + 30;
-  const startMin  = toVirtualMinutes(r.timeStart);
-  const endMin    = toVirtualMinutes(r.timeEnd);
+  const startMin  = toVirtualMinutes(r.timeStart, openVirtual);
+  const endMin    = toVirtualMinutes(r.timeEnd, openVirtual);
   return startMin < slotEnd && endMin > slotStart;
 }
 
-/** True only for the first half-hour slot covered by the entry. */
-function isFirstCoveredSlot(r: HasTimes, slot: TimeSlot): boolean {
-  const slotStart = slotToVirtualMinutes(slot);
-  const startMin  = toVirtualMinutes(r.timeStart);
+function isFirstCoveredSlot(r: HasTimes, slot: TimeSlot, openVirtual: number): boolean {
+  const slotStart = slotToVirtualMinutes(slot, openVirtual);
+  const startMin  = toVirtualMinutes(r.timeStart, openVirtual);
   return startMin >= slotStart && startMin < slotStart + 30;
 }
 
-/** Number of 30-min rows the entry spans. */
-function getRowSpan(r: HasTimes): number {
-  return SLOTS.filter((s) => coversSlot(r, s)).length;
+function getRowSpan(r: HasTimes, slots: TimeSlot[], openVirtual: number): number {
+  return slots.filter((s) => coversSlot(r, s, openVirtual)).length;
 }
 
 function formatCurrency(amount: number): string {
@@ -91,6 +66,7 @@ function toVirtual(f: ScheduleFixedReservation, currentDate: string): VirtualFix
     timeStart:     f.timeStart,
     timeEnd:       f.timeEnd,
     clientName:    f.clientName,
+    clientPhone:   f.clientPhone ?? null,
     type:          f.type ?? null,
     isFixed:       true,
     paymentStatus: paidToday ? 'paid' : 'pending',
@@ -174,6 +150,12 @@ function Cell({ entry, onClick }: CellProps) {
           )}
         </span>
 
+        {entry.clientPhone && (
+          <span className="text-[10px] font-normal opacity-60 truncate">
+            {entry.clientPhone}
+          </span>
+        )}
+
         <span className={`text-[10px] font-normal mt-0.5 ${isPaidStyle ? 'opacity-80' : 'opacity-70'}`}>
           {timeRange}
         </span>
@@ -207,6 +189,8 @@ interface Props {
   clubId: number | null;
   refreshKey?: number;
   isOwner?: boolean;
+  openTime?: string;   // "HH:mm" — defaults to "09:00"
+  closeTime?: string;  // "HH:mm" — defaults to "01:00"
   onCellClick: (courtId: number, slot: TimeSlot, reservation?: Reservation) => void;
   onFixedClick?: (entry: VirtualFixedReservation) => void;
   onDeleteCourt?: (id: number) => Promise<void>;
@@ -219,6 +203,8 @@ export default function ScheduleGrid({
   clubId,
   refreshKey = 0,
   isOwner = false,
+  openTime  = '09:00',
+  closeTime = '01:00',
   onCellClick,
   onFixedClick,
   onDeleteCourt,
@@ -227,6 +213,23 @@ export default function ScheduleGrid({
   const [entries,  setEntries]  = useState<ScheduleEntry[]>([]);
   const [loading,  setLoading]  = useState(false);
   const [error,    setError]    = useState('');
+
+  const { openVirtual, SLOTS } = useMemo(() => {
+    const [oh, om] = openTime.split(':').map(Number);
+    const ov = oh * 60 + om;
+    const [ch, cm] = closeTime.split(':').map(Number);
+    const closeRaw = ch * 60 + cm;
+    const cv = closeRaw <= ov ? closeRaw + 24 * 60 : closeRaw;
+    const numSlots = Math.ceil((cv - ov) / 30);
+    const slots = Array.from({ length: numSlots }, (_, i) => {
+      const virtual = ov + i * 30;
+      const real    = virtual % (24 * 60);
+      const h = Math.floor(real / 60);
+      const m = real % 60;
+      return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}` as TimeSlot;
+    });
+    return { openVirtual: ov, SLOTS: slots };
+  }, [openTime, closeTime]);
 
   // delete court modal state
   const [pendingDelete,  setPendingDelete]  = useState<Court | null>(null);
@@ -263,7 +266,7 @@ export default function ScheduleGrid({
         // Merge and sort by courtId then timeStart (virtual minutes)
         const merged: ScheduleEntry[] = [...reservations, ...virtual].sort((a, b) => {
           if (a.courtId !== b.courtId) return a.courtId - b.courtId;
-          return toVirtualMinutes(a.timeStart) - toVirtualMinutes(b.timeStart);
+          return toVirtualMinutes(a.timeStart, openVirtual) - toVirtualMinutes(b.timeStart, openVirtual);
         });
 
         setEntries(merged);
@@ -276,7 +279,7 @@ export default function ScheduleGrid({
       });
 
     return () => { cancelled = true; };
-  }, [date, clubId, refreshKey]);
+  }, [date, clubId, refreshKey, openVirtual]);
 
   if (loading) {
     return <p className="text-center text-gray-400 py-16">Cargando…</p>;
@@ -397,15 +400,15 @@ export default function ScheduleGrid({
                 </td>
                 {courts.map((court) => {
                   const entry = entries.find(
-                    (e) => e.courtId === court.id && coversSlot(e, slot),
+                    (e) => e.courtId === court.id && coversSlot(e, slot, openVirtual),
                   );
 
                   // Cell already covered by a rowSpan → omit TD
-                  if (entry && !isFirstCoveredSlot(entry, slot)) {
+                  if (entry && !isFirstCoveredSlot(entry, slot, openVirtual)) {
                     return null;
                   }
 
-                  const span = entry ? getRowSpan(entry) : 1;
+                  const span = entry ? getRowSpan(entry, SLOTS, openVirtual) : 1;
 
                   const handleClick = entry && isVirtualFixed(entry)
                     ? () => onFixedClick?.(entry)

@@ -56,7 +56,7 @@ export default function StockPage() {
   const lowStockCount = products.filter((p) => p.stock > 0 && p.stock < 5).length;
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-app-bg">
+    <div className="bg-gray-50 dark:bg-app-bg">
       <header className="bg-white dark:bg-app-surface border-b border-gray-200 dark:border-app-border px-6 py-4 flex items-center justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-xl font-bold text-indigo-700 dark:text-indigo-400 tracking-tight">Stock</h1>

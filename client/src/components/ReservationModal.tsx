@@ -14,6 +14,7 @@ export interface ModalState {
 
 export interface FormData {
   clientName: string;
+  clientPhone?: string | null;
   type: string;
   totalPrice?: number;
   depositAmount?: number;
@@ -25,7 +26,8 @@ interface Props {
   state: ModalState;
   onClose: () => void;
   onSave: (form: FormData) => Promise<void>;
-  onMarkPaid: (id: number, paidAmount: number) => Promise<void>;
+  onPayAmount: (id: number, amount: number) => Promise<Reservation>;
+  onUpdateNote: (id: number, note: string | null) => Promise<void>;
   onDelete: (id: number) => Promise<void>;
 }
 
@@ -55,6 +57,8 @@ const DURATION_OPTIONS = [
   { value: "custom", label: "Personalizado" },
 ];
 
+const QUICK_AMOUNTS = [1000, 2000, 5000];
+
 // ── helpers ───────────────────────────────────────────────────────────────────
 
 function isoToMinutes(iso: string): number {
@@ -74,7 +78,7 @@ function addMinutes(slot: TimeSlot, minutes: number): string {
 function defaultDurationForType(type: string): string {
   if (type === "class")      return "60";
   if (type === "tournament") return "custom";
-  return "90"; // partido, desafío
+  return "90";
 }
 
 function durationFromReservation(r: Reservation): { duration: string; customMinutes: string } {
@@ -97,14 +101,33 @@ export default function ReservationModal({
   state,
   onClose,
   onSave,
-  onMarkPaid,
+  onPayAmount,
+  onUpdateNote,
   onDelete,
 }: Props) {
   const { reservation, courtName, date, slot } = state;
   const isEdit = !!reservation;
 
+  // ── live reservation (updated after payments/notes without closing modal) ──
+  const [liveReservation, setLiveReservation] = useState<Reservation | null>(
+    reservation ?? null,
+  );
+
+  // ── financial snapshot from live data ──
+  const savedTotal   = liveReservation?.totalPrice   != null ? parseFloat(liveReservation.totalPrice)   : 0;
+  const savedDeposit = liveReservation?.depositAmount != null ? parseFloat(liveReservation.depositAmount) : 0;
+  const savedPaid    = liveReservation?.paidAmount    != null ? parseFloat(liveReservation.paidAmount)    : null;
+  const savedRemaining = savedPaid !== null
+    ? Math.max(0, savedTotal - savedPaid)
+    : Math.max(0, savedTotal - savedDeposit);
+  const depositCovered   = savedPaid !== null && savedPaid >= savedDeposit && savedDeposit > 0;
+  const isPaidFull       = savedTotal > 0 && savedPaid !== null && savedPaid >= savedTotal;
+  const isPartialPay     = savedTotal > 0 && savedPaid !== null && savedPaid > 0 && savedPaid < savedTotal;
+  const isDepositCovered = savedDeposit > 0 && savedPaid !== null && savedPaid >= savedDeposit;
+
   // ── estado del formulario ──
   const [clientName,    setClientName]    = useState(reservation?.clientName ?? "");
+  const [clientPhone,   setClientPhone]   = useState(reservation?.clientPhone ?? "");
   const [type,          setType]          = useState(reservation?.type ?? "booking");
 
   const [totalPrice,    setTotalPrice]    = useState(
@@ -118,27 +141,22 @@ export default function ReservationModal({
   const [busy,  setBusy]                = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
 
+  // ── payment input state ──
+  const [paymentInput,   setPaymentInput]   = useState("");
+  const [paymentBusy,    setPaymentBusy]    = useState(false);
+  const [paymentError,   setPaymentError]   = useState("");
+  const [paymentSuccess, setPaymentSuccess] = useState(false);
+
+  // ── internal note state ──
+  const [noteText,  setNoteText]  = useState(reservation?.internalNote ?? "");
+  const [noteBusy,  setNoteBusy]  = useState(false);
+  const [noteSaved, setNoteSaved] = useState(false);
+  const [noteError, setNoteError] = useState("");
+
   // ── estado turno fijo ──
-  const [isTurnoFijo,  setIsTurnoFijo]  = useState(false);
-  const [fixedDayOfWeek, setFixedDayOfWeek] = useState<number>(1); // 1 = Monday
-  const [fixedWarning, setFixedWarning] = useState(false);
-
-  const isPaid = reservation?.paymentStatus === "paid";
-
-  // ── financial snapshot from the saved reservation ──
-  const savedTotal   = reservation?.totalPrice   != null ? parseFloat(reservation.totalPrice)   : 0;
-  const savedDeposit = reservation?.depositAmount != null ? parseFloat(reservation.depositAmount) : 0;
-  const savedPaid    = reservation?.paidAmount    != null ? parseFloat(reservation.paidAmount)    : null;
-  // Remaining: use paidAmount when available, otherwise fall back to deposit
-  const savedRemaining = savedPaid !== null
-    ? Math.max(0, savedTotal - savedPaid)
-    : Math.max(0, savedTotal - savedDeposit);
-  const depositCovered = savedPaid !== null && savedPaid >= savedDeposit && savedDeposit > 0;
-
-  // ── payment status badges ──
-  const isPaidFull      = savedTotal > 0 && savedPaid !== null && savedPaid >= savedTotal;
-  const isPartialPay    = savedTotal > 0 && savedPaid !== null && savedPaid > 0 && savedPaid < savedTotal;
-  const isDepositCovered = savedDeposit > 0 && savedPaid !== null && savedPaid >= savedDeposit;
+  const [isTurnoFijo,   setIsTurnoFijo]   = useState(false);
+  const [fixedDayOfWeek, setFixedDayOfWeek] = useState<number>(1);
+  const [fixedWarning,  setFixedWarning]  = useState(false);
 
   // ── estado de duración ──
   const initDuration = isEdit
@@ -148,7 +166,6 @@ export default function ReservationModal({
   const [duration,      setDuration]      = useState(initDuration.duration);
   const [customMinutes, setCustomMinutes] = useState(initDuration.customMinutes);
 
-  // Actualizar duración por defecto al cambiar el tipo (solo en nuevas reservas)
   useEffect(() => {
     if (isEdit) return;
     setDuration(defaultDurationForType(type));
@@ -237,6 +254,7 @@ export default function ReservationModal({
         timeStart,
         duration: effectiveMinutes,
         clientName,
+        clientPhone: clientPhone.trim() || null,
         type,
         totalPrice: parsedTotalPrice,
         depositAmount: parsedDepositAmount,
@@ -256,6 +274,7 @@ export default function ReservationModal({
     run(() =>
       onSave({
         clientName,
+        clientPhone: clientPhone.trim() || null,
         type,
         totalPrice: parsedTotalPrice,
         depositAmount: parsedDepositAmount,
@@ -265,9 +284,45 @@ export default function ReservationModal({
     );
   }
 
-  function handleDelete() {
-    if (!reservation) return;
-    setConfirmingDelete(true);
+  // ── payment handlers ──────────────────────────────────────────────────────
+
+  async function handleRegisterPayment(overrideAmount?: number) {
+    const rawAmount = overrideAmount !== undefined ? overrideAmount : parseFloat(paymentInput);
+    if (!Number.isFinite(rawAmount) || rawAmount <= 0) {
+      setPaymentError("Ingresá un monto válido.");
+      return;
+    }
+    setPaymentBusy(true);
+    setPaymentError("");
+    setPaymentSuccess(false);
+    try {
+      const updated = await onPayAmount(liveReservation!.id, rawAmount);
+      setLiveReservation(updated);
+      setPaymentInput("");
+      setPaymentSuccess(true);
+      setTimeout(() => setPaymentSuccess(false), 3000);
+    } catch (err) {
+      setPaymentError((err as Error).message);
+    } finally {
+      setPaymentBusy(false);
+    }
+  }
+
+  // ── note handler ──────────────────────────────────────────────────────────
+
+  async function handleSaveNote() {
+    setNoteBusy(true);
+    setNoteSaved(false);
+    setNoteError("");
+    try {
+      await onUpdateNote(liveReservation!.id, noteText.trim() || null);
+      setNoteSaved(true);
+      setTimeout(() => setNoteSaved(false), 3000);
+    } catch (err) {
+      setNoteError((err as Error).message);
+    } finally {
+      setNoteBusy(false);
+    }
   }
 
   return (
@@ -275,7 +330,7 @@ export default function ReservationModal({
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
       onMouseDown={handleBackdrop}
     >
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 animate-in fade-in zoom-in-95 duration-150">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 animate-in fade-in zoom-in-95 duration-150 overflow-y-auto max-h-[90vh]">
 
         {/* ── encabezado ── */}
         <div className="flex items-start justify-between px-6 pt-6 pb-4 border-b">
@@ -359,7 +414,7 @@ export default function ReservationModal({
               </div>
             )}
             <div className="flex justify-between text-sm border-t border-gray-200 pt-1 mt-1">
-              {isPaid ? (
+              {isPaidFull ? (
                 <>
                   <span className="text-gray-500">Estado</span>
                   <span className="font-bold text-emerald-600">Pagado ✓</span>
@@ -376,6 +431,102 @@ export default function ReservationModal({
                 {depositCovered ? 'Seña cubierta ✅' : 'Seña pendiente'}
               </p>
             )}
+          </div>
+        )}
+
+        {/* ── registrar pago (solo en edición, y solo si hay precio y no está pagado) ── */}
+        {isEdit && savedTotal > 0 && !isPaidFull && (
+          <div className="mx-6 mt-3 rounded-xl border border-indigo-100 bg-indigo-50/60 px-4 py-3 space-y-2.5">
+            <p className="text-xs font-semibold text-indigo-700 uppercase tracking-wide">Registrar pago</p>
+
+            {/* Quick amounts */}
+            <div className="flex gap-1.5 flex-wrap">
+              {QUICK_AMOUNTS.map((amt) => (
+                <button
+                  key={amt}
+                  type="button"
+                  disabled={paymentBusy}
+                  onClick={() =>
+                    setPaymentInput((prev) =>
+                      String((parseFloat(prev || "0") || 0) + amt)
+                    )
+                  }
+                  className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-indigo-200 bg-white text-indigo-700 hover:border-indigo-400 hover:bg-indigo-50 transition-colors disabled:opacity-50"
+                >
+                  +{formatCurrency(amt)}
+                </button>
+              ))}
+              {savedRemaining > 0 && (
+                <button
+                  type="button"
+                  disabled={paymentBusy}
+                  onClick={() => handleRegisterPayment(savedRemaining)}
+                  className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-emerald-300 bg-white text-emerald-700 hover:bg-emerald-50 transition-colors disabled:opacity-50"
+                >
+                  Pago completo ({formatCurrency(savedRemaining)})
+                </button>
+              )}
+            </div>
+
+            {/* Custom amount input */}
+            <div className="flex gap-2">
+              <input
+                type="number"
+                min="1"
+                step="1"
+                value={paymentInput}
+                onChange={(e) => { setPaymentInput(e.target.value); setPaymentError(""); }}
+                placeholder="Otro monto…"
+                className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-white transition-shadow"
+              />
+              <button
+                type="button"
+                disabled={paymentBusy || !paymentInput || parseFloat(paymentInput) <= 0}
+                onClick={() => handleRegisterPayment()}
+                className="px-4 py-2 text-sm font-semibold rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+              >
+                {paymentBusy ? "…" : "Registrar"}
+              </button>
+            </div>
+
+            {paymentError && (
+              <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-1.5">
+                {paymentError}
+              </p>
+            )}
+            {paymentSuccess && (
+              <p className="text-xs font-medium text-emerald-700">Pago registrado ✓</p>
+            )}
+          </div>
+        )}
+
+        {/* ── nota interna (solo en edición) ── */}
+        {isEdit && (
+          <div className="mx-6 mt-3">
+            <label className="block text-xs font-medium text-gray-500 mb-1">
+              Nota interna
+            </label>
+            <textarea
+              value={noteText}
+              onChange={(e) => { setNoteText(e.target.value); setNoteSaved(false); }}
+              placeholder="Notas para el equipo…"
+              rows={2}
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 resize-none transition-shadow"
+            />
+            <div className="flex items-center justify-between mt-1">
+              <span className="text-xs">
+                {noteError && <span className="text-red-600">{noteError}</span>}
+                {noteSaved && !noteError && <span className="text-emerald-600">Nota guardada ✓</span>}
+              </span>
+              <button
+                type="button"
+                disabled={noteBusy}
+                onClick={handleSaveNote}
+                className="text-xs font-medium text-indigo-600 hover:text-indigo-800 disabled:opacity-50 transition-colors"
+              >
+                {noteBusy ? "Guardando…" : "Guardar nota"}
+              </button>
+            </div>
           </div>
         )}
 
@@ -397,6 +548,21 @@ export default function ReservationModal({
               onChange={(e) => setClientName(e.target.value)}
               placeholder="Juan Pérez"
               required
+              className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 transition-shadow"
+            />
+          </div>
+
+          {/* Teléfono (opcional) */}
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1">
+              Teléfono <span className="text-gray-400 font-normal">(opcional)</span>
+            </label>
+            <input
+              type="tel"
+              value={clientPhone}
+              onChange={(e) => setClientPhone(e.target.value)}
+              placeholder="11 1234-5678"
+              maxLength={20}
               className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 transition-shadow"
             />
           </div>
@@ -546,41 +712,20 @@ export default function ReservationModal({
             </div>
           </div>
 
-          {/* Free reservation hint */}
           {isFree && (
             <p className="text-xs text-gray-400 -mt-1">Reserva sin costo</p>
           )}
 
-          {/* Deposit exceeds total error */}
           {depositExceedsTotal && (
             <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2 -mt-1">
               La seña no puede ser mayor que el precio total
             </p>
           )}
 
-          {/* Error */}
           {error && (
             <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
               {error}
             </p>
-          )}
-
-          {/* ── Botón registrar pago (solo edición) ── */}
-          {isEdit && (
-            <div className="pt-1">
-              <button
-                type="button"
-                disabled={isPaid || busy}
-                onClick={() => run(async () => { await onMarkPaid(reservation!.id, savedTotal); })}
-                className={`w-full py-2.5 text-sm font-semibold rounded-lg border transition-all duration-150
-                  ${isPaid
-                    ? 'bg-emerald-50 border-emerald-300 text-emerald-700 cursor-default'
-                    : 'border-emerald-500 text-emerald-700 hover:bg-emerald-50 active:bg-emerald-100'
-                  } disabled:cursor-not-allowed`}
-              >
-                {isPaid ? 'Pagado ✓' : 'Registrar pago completo'}
-              </button>
-            </div>
           )}
         </form>
 
@@ -590,7 +735,7 @@ export default function ReservationModal({
             <button
               type="button"
               disabled={busy}
-              onClick={handleDelete}
+              onClick={() => setConfirmingDelete(true)}
               className="text-xs text-gray-400 hover:text-red-500 transition-colors"
             >
               Eliminar

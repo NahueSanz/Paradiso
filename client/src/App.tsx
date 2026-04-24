@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import * as api from './api';
+import type { OpeningHoursResult } from './api';
 import ScheduleGrid from './components/ScheduleGrid';
 import ReservationModal, { type FormData, type ModalState } from './components/ReservationModal';
 import FixedReservationModal from './components/FixedReservationModal';
@@ -12,7 +13,11 @@ import { useClub } from './context/ClubContext';
 import { useMembership } from './context/MembershipContext';
 
 function todayISO(): string {
-  return new Date().toISOString().slice(0, 10);
+  const d    = new Date();
+  const yyyy = d.getFullYear();
+  const mm   = String(d.getMonth() + 1).padStart(2, '0');
+  const dd   = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
 }
 
 // ── Create Court Modal ────────────────────────────────────────────────────────
@@ -242,6 +247,146 @@ function ProfileModal({ currentDisplayName, onClose, onSave }: ProfileModalProps
   );
 }
 
+// ── Edit Day Hours Modal ──────────────────────────────────────────────────────
+
+interface EditDayHoursModalProps {
+  clubId: number;
+  date: string;
+  current: OpeningHoursResult;
+  onClose: () => void;
+  onSaved: (result: OpeningHoursResult) => void;
+}
+
+function EditDayHoursModal({ clubId, date, current, onClose, onSaved }: EditDayHoursModalProps) {
+  const [openTime,  setOpenTime]  = useState(current.openTime);
+  const [closeTime, setCloseTime] = useState(current.closeTime);
+  const [saving,    setSaving]    = useState(false);
+  const [removing,  setRemoving]  = useState(false);
+  const [error,     setError]     = useState('');
+
+  async function handleSave(e: React.FormEvent) {
+    e.preventDefault();
+    setSaving(true);
+    setError('');
+    try {
+      await api.updateDateHours(clubId, date, openTime, closeTime);
+      onSaved({ openTime, closeTime, isOverride: true });
+      onClose();
+    } catch (err: any) {
+      setError(err.message ?? 'Error al guardar.');
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleRemove() {
+    setRemoving(true);
+    setError('');
+    try {
+      await api.deleteDateHours(clubId, date);
+      const updated = await api.getOpeningHours(clubId, date);
+      onSaved(updated);
+      onClose();
+    } catch (err: any) {
+      setError(err.message ?? 'Error al eliminar.');
+    } finally {
+      setRemoving(false);
+    }
+  }
+
+  const DAY_NAMES = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
+  const dow = new Date(`${date}T12:00:00Z`).getUTCDay();
+  const dayLabel = DAY_NAMES[dow];
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6">
+        <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-1">
+          Horario del día
+        </h2>
+        <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
+          {dayLabel} {date}
+          {current.isOverride && (
+            <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold
+                             bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-700">
+              Horario modificado
+            </span>
+          )}
+        </p>
+
+        <form onSubmit={handleSave} className="space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
+                Apertura
+              </label>
+              <input
+                type="time"
+                value={openTime}
+                onChange={(e) => setOpenTime(e.target.value)}
+                className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm
+                           bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100
+                           focus:outline-none focus:ring-2 focus:ring-indigo-400"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
+                Cierre
+              </label>
+              <input
+                type="time"
+                value={closeTime}
+                onChange={(e) => setCloseTime(e.target.value)}
+                className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm
+                           bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100
+                           focus:outline-none focus:ring-2 focus:ring-indigo-400"
+              />
+            </div>
+          </div>
+
+          <p className="text-[11px] text-slate-400 dark:text-slate-500">
+            Si el cierre es menor a la apertura se interpreta como el día siguiente (ej: 09:00 → 01:00).
+          </p>
+
+          {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}
+
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 px-4 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-600
+                         text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={saving || removing}
+              className="flex-1 px-4 py-2 text-sm rounded-lg bg-indigo-600 text-white font-medium
+                         hover:bg-indigo-700 disabled:opacity-50 transition-colors"
+            >
+              {saving ? 'Guardando…' : 'Guardar'}
+            </button>
+          </div>
+
+          {current.isOverride && (
+            <button
+              type="button"
+              onClick={handleRemove}
+              disabled={saving || removing}
+              className="w-full px-4 py-2 text-sm rounded-lg text-amber-700 dark:text-amber-300
+                         border border-amber-300 dark:border-amber-700 hover:bg-amber-50 dark:hover:bg-amber-900/20
+                         disabled:opacity-50 transition-colors"
+            >
+              {removing ? 'Eliminando…' : 'Quitar horario modificado'}
+            </button>
+          )}
+        </form>
+      </div>
+    </div>
+  );
+}
+
 // ── App ───────────────────────────────────────────────────────────────────────
 
 export default function App() {
@@ -264,6 +409,10 @@ export default function App() {
   const [showProfileModal, setShowProfileModal]         = useState(false);
   const [showFixedModal,  setShowFixedModal]  = useState(false);
   const [editingFixed,    setEditingFixed]    = useState<VirtualFixedReservation | null>(null);
+  const [showEditHoursModal, setShowEditHoursModal] = useState(false);
+  const [openingHours, setOpeningHours] = useState<OpeningHoursResult>({
+    openTime: '09:00', closeTime: '01:00', isOverride: false,
+  });
 
   // Toast
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
@@ -282,6 +431,14 @@ export default function App() {
       .catch(() => setCourtError('Error al cargar las canchas.'));
   }, [selectedClubId, courtsRefreshKey]);
 
+  // Fetch opening hours whenever date or club changes
+  useEffect(() => {
+    if (selectedClubId === null) return;
+    api.getOpeningHours(selectedClubId, date)
+      .then(setOpeningHours)
+      .catch(() => setOpeningHours({ openTime: '09:00', closeTime: '01:00', isOverride: false }));
+  }, [selectedClubId, date]);
+
 
   function refresh() { setRefreshKey((k) => k + 1); }
   function refreshCourts() { setCourtsKey((k) => k + 1); }
@@ -293,9 +450,10 @@ export default function App() {
 
   async function handleSave(form: FormData) {
     const base = {
-      clientName: form.clientName,
-      timeStart:  form.timeStart,
-      timeEnd:    form.timeEnd,
+      clientName:  form.clientName,
+      clientPhone: form.clientPhone ?? null,
+      timeStart:   form.timeStart,
+      timeEnd:     form.timeEnd,
       ...(form.type          ? { type: form.type }                   : {}),
       ...(form.totalPrice    ? { totalPrice: form.totalPrice }        : {}),
       ...(form.depositAmount ? { depositAmount: form.depositAmount }  : {}),
@@ -313,9 +471,14 @@ export default function App() {
     refresh();
   }
 
-  async function handleMarkPaid(id: number, paidAmount: number) {
-    await api.updateReservation(id, { paymentStatus: 'paid', paidAmount });
+  async function handlePayAmount(id: number, amount: number): Promise<Reservation> {
+    const updated = await api.payReservation(id, amount);
     refresh();
+    return updated;
+  }
+
+  async function handleUpdateNote(id: number, note: string | null): Promise<void> {
+    await api.updateReservationNote(id, note);
   }
 
   async function handleDelete(id: number) {
@@ -407,6 +570,21 @@ export default function App() {
                 Reserva Fija
               </button>
             )}
+            {isOwner && selectedClubId && (
+              <button
+                onClick={() => setShowEditHoursModal(true)}
+                className="flex items-center gap-1.5 text-sm font-medium text-slate-600
+                           hover:text-slate-900 px-3 py-1.5 rounded-lg hover:bg-slate-100
+                           dark:hover:bg-slate-700/50 border border-slate-200 dark:border-slate-600
+                           dark:text-slate-400 transition-colors"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+                    d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                Editar horario del día
+              </button>
+            )}
           </div>
         </div>
 
@@ -419,14 +597,26 @@ export default function App() {
               </span>
             ))}
           </div>
-          <input
-            type="date"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-            className="ml-auto border dark:border-slate-600 rounded-lg px-3 py-1.5 text-sm
-                       bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100
-                       focus:outline-none focus:ring-2 focus:ring-indigo-400"
-          />
+          <div className="ml-auto flex items-center gap-2 flex-wrap justify-end">
+            {openingHours.isOverride && (
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold
+                               bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300
+                               border border-amber-300 dark:border-amber-700">
+                Horario modificado
+              </span>
+            )}
+            <span className="text-xs text-slate-400 dark:text-slate-500">
+              {openingHours.openTime} – {openingHours.closeTime}
+            </span>
+            <input
+              type="date"
+              value={date}
+              onChange={(e) => setDate(e.target.value)}
+              className="border dark:border-slate-600 rounded-lg px-3 py-1.5 text-sm
+                         bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100
+                         focus:outline-none focus:ring-2 focus:ring-indigo-400"
+            />
+          </div>
         </div>
       </div>
 
@@ -447,6 +637,8 @@ export default function App() {
               clubId={selectedClubId}
               refreshKey={refreshKey}
               isOwner={isOwner}
+              openTime={openingHours.openTime}
+              closeTime={openingHours.closeTime}
               onCellClick={openModal}
               onFixedClick={(entry) => setEditingFixed(entry)}
               onDeleteCourt={handleDeleteCourt}
@@ -462,7 +654,8 @@ export default function App() {
           state={modal}
           onClose={() => setModal(null)}
           onSave={handleSave}
-          onMarkPaid={handleMarkPaid}
+          onPayAmount={handlePayAmount}
+          onUpdateNote={handleUpdateNote}
           onDelete={handleDelete}
         />
       )}
@@ -503,6 +696,20 @@ export default function App() {
           currentDisplayName={currentMembership.displayName}
           onClose={() => setShowProfileModal(false)}
           onSave={updateDisplayName}
+        />
+      )}
+
+      {/* Edit Day Hours Modal */}
+      {showEditHoursModal && selectedClubId && (
+        <EditDayHoursModal
+          clubId={selectedClubId}
+          date={date}
+          current={openingHours}
+          onClose={() => setShowEditHoursModal(false)}
+          onSaved={(result) => {
+            setOpeningHours(result);
+            showToast(result.isOverride ? 'Horario del día actualizado' : 'Horario restaurado al predeterminado');
+          }}
         />
       )}
 

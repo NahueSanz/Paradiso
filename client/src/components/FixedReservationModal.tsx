@@ -3,6 +3,7 @@ import type { Court, VirtualFixedReservation } from '../types';
 import {
   createFixedReservation,
   deleteFixedReservation,
+  payFixedReservation,
   updateFixedReservation,
 } from '../api';
 
@@ -63,6 +64,7 @@ interface FormErrors {
   timeStart?:     string;
   duration?:      string;
   clientName?:    string;
+  clientPhone?:   string;
   totalPrice?:    string;
   depositAmount?: string;
 }
@@ -84,6 +86,7 @@ export default function FixedReservationModal({ courts, editData, selectedDate, 
     isEditMode ? editData.duration : '',
   );
   const [clientName,    setClientName]    = useState(isEditMode ? editData.clientName : '');
+  const [clientPhone,   setClientPhone]   = useState(isEditMode ? (editData.clientPhone ?? '') : '');
   const [type,          setType]          = useState(isEditMode ? (editData.type ?? '') : '');
   const [totalPrice,    setTotalPrice]    = useState(
     isEditMode && editData.totalPrice != null ? editData.totalPrice : '',
@@ -119,6 +122,7 @@ export default function FixedReservationModal({ courts, editData, selectedDate, 
     setPayError('');
     setPayBusy(true);
     try {
+      await payFixedReservation(editData.rawId, isLastWeek);
       onSuccess('Pago registrado correctamente.');
       onClose();
     } catch (err) {
@@ -149,6 +153,9 @@ export default function FixedReservationModal({ courts, editData, selectedDate, 
     if (!timeStart)                    errs.timeStart = 'Ingresá un horario.';
     if (duration === '' || duration <= 0) errs.duration = 'La duración debe ser mayor a 0.';
     if (!clientName.trim())            errs.clientName = 'El nombre del cliente es requerido.';
+    if (clientPhone.trim() && !/^[0-9 +\-]{1,20}$/.test(clientPhone.trim())) {
+      errs.clientPhone = 'Solo se permiten números, espacios, + y -.';
+    }
 
     const parsedTotal   = parsePrice(totalPrice);
     const parsedDeposit = parsePrice(depositAmount);
@@ -187,6 +194,7 @@ export default function FixedReservationModal({ courts, editData, selectedDate, 
       if (isEditMode) {
         await updateFixedReservation(editData.rawId, {
           clientName:    clientName.trim(),
+          clientPhone:   clientPhone.trim() || null,
           timeStart,
           duration:      parsedDuration,
           type:          type || null,
@@ -201,6 +209,7 @@ export default function FixedReservationModal({ courts, editData, selectedDate, 
           timeStart,
           duration:  parsedDuration,
           clientName: clientName.trim(),
+          clientPhone: clientPhone.trim() || null,
           ...(type ? { type } : {}),
           ...(parsedTotal   != null ? { totalPrice:    parsedTotal   } : {}),
           ...(parsedDeposit != null ? { depositAmount: parsedDeposit } : {}),
@@ -445,6 +454,25 @@ export default function FixedReservationModal({ courts, editData, selectedDate, 
             />
             {fieldErrors.clientName && (
               <p className="text-xs text-red-500 mt-1">{fieldErrors.clientName}</p>
+            )}
+          </div>
+
+          {/* Client phone (optional) */}
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1">
+              Teléfono <span className="text-gray-400 font-normal">(opcional)</span>
+            </label>
+            <input
+              type="tel"
+              value={clientPhone}
+              onChange={(e) => setClientPhone(e.target.value)}
+              placeholder="Ej: 11 1234 5678"
+              maxLength={20}
+              className={`w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2
+                focus:ring-indigo-400 transition-shadow ${fieldErrors.clientPhone ? 'border-red-400' : 'border-gray-300'}`}
+            />
+            {fieldErrors.clientPhone && (
+              <p className="text-xs text-red-500 mt-1">{fieldErrors.clientPhone}</p>
             )}
           </div>
 

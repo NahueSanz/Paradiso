@@ -6,6 +6,7 @@ import Dashboard from './pages/Dashboard';
 import CashPage from './pages/CashPage';
 import StockPage from './pages/StockPage';
 import SellPage from './pages/SellPage';
+import SettingsPage from './pages/SettingsPage';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import InvitePage from './pages/InvitePage';
@@ -100,6 +101,17 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
               <RequireAuth>
                 <OwnerOnly>
                   <WithLayout><CashPage /></WithLayout>
+                </OwnerOnly>
+              </RequireAuth>
+            }
+          />
+
+          <Route
+            path="/settings"
+            element={
+              <RequireAuth>
+                <OwnerOnly>
+                  <WithLayout><SettingsPage /></WithLayout>
                 </OwnerOnly>
               </RequireAuth>
             }

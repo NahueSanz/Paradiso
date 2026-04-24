@@ -47,39 +47,36 @@ export async function sellProduct(
   paymentMethod: string,
   clubId: number,
 ) {
-  const product = await prisma.product.findUnique({ where: { id: productId } });
+  return prisma.$transaction(async (tx) => {
+    const product = await tx.product.findUnique({ where: { id: productId } });
+    if (!product) throw Object.assign(new Error('Producto no encontrado'), { status: 404 });
+    if (product.clubId !== clubId) throw Object.assign(new Error('Producto no pertenece al club'), { status: 403 });
 
-  if (!product) throw Object.assign(new Error('Producto no encontrado'), { status: 404 });
-  if (product.clubId !== clubId) throw Object.assign(new Error('Producto no pertenece al club'), { status: 403 });
-  if (product.stock < quantity) throw Object.assign(new Error('Stock insuficiente'), { status: 400 });
+    // Atomic check-and-decrement: fails if stock drops below quantity
+    // between the findUnique above and this update.
+    const result = await tx.product.updateMany({
+      where: { id: productId, stock: { gte: quantity } },
+      data:  { stock: { decrement: quantity } },
+    });
+    if (result.count === 0) throw Object.assign(new Error('Stock insuficiente'), { status: 400 });
 
-  const salePrice = Number(product.salePrice);
-  const amount = salePrice * quantity;
-  console.log({ productId, salePrice, quantity, amount });
+    const salePrice = Number(product.salePrice);
+    const amount    = salePrice * quantity;
 
-  const [updated] = await prisma.$transaction([
-    prisma.product.update({
-      where: { id: productId },
-      data: { stock: product.stock - quantity },
-    }),
-    prisma.cashMovement.create({
+    await tx.cashMovement.create({
       data: {
         clubId,
-        type: 'income',
-        concept: `Venta - ${product.name} x${quantity}`,
+        type:             'income',
+        concept:          `Venta - ${product.name} x${quantity}`,
         amount,
         paymentMethod,
         relatedProductId: productId,
       },
-    }),
-    prisma.stockMovement.create({
-      data: {
-        productId,
-        quantity: -quantity,
-        type: 'sale',
-      },
-    }),
-  ]);
+    });
+    await tx.stockMovement.create({
+      data: { productId, quantity: -quantity, type: 'sale' },
+    });
 
-  return serializeProduct(updated);
+    return serializeProduct({ ...product, stock: product.stock - quantity });
+  });
 }

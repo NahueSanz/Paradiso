@@ -4,11 +4,15 @@ function serialize(m: { amount: unknown; [key: string]: unknown }) {
   return { ...m, amount: Number(m.amount) };
 }
 
-export async function getMovements(clubId: number) {
+export async function getMovements(clubId: number, from?: Date, to?: Date) {
   const items = await prisma.movement.findMany({
-    where: { clubId },
+    where: {
+      clubId,
+      ...(from && to ? { createdAt: { gte: from, lte: to } } : {}),
+    },
     include: { product: { select: { id: true, name: true } } },
     orderBy: { createdAt: 'desc' },
+    take: 200,
   });
   return items.map(serialize);
 }
@@ -38,37 +42,39 @@ export async function createSaleMovement(data: {
   quantity: number;
   paymentMethod: string;
 }) {
-  const product = await prisma.product.findUnique({ where: { id: data.productId } });
+  return prisma.$transaction(async (tx) => {
+    const product = await tx.product.findUnique({ where: { id: data.productId } });
+    if (!product) throw Object.assign(new Error('Producto no encontrado'), { status: 404 });
+    if (product.clubId !== data.clubId) throw Object.assign(new Error('Producto no pertenece al club'), { status: 403 });
 
-  if (!product) throw Object.assign(new Error('Producto no encontrado'), { status: 404 });
-  if (product.clubId !== data.clubId) throw Object.assign(new Error('Producto no pertenece al club'), { status: 403 });
-  if (product.stock < data.quantity) throw Object.assign(new Error('Stock insuficiente'), { status: 400 });
+    // Atomic check-and-decrement: fails if stock drops below quantity
+    // between the findUnique above and this update.
+    const result = await tx.product.updateMany({
+      where: { id: data.productId, stock: { gte: data.quantity } },
+      data:  { stock: { decrement: data.quantity } },
+    });
+    if (result.count === 0) throw Object.assign(new Error('Stock insuficiente'), { status: 400 });
 
-  const amount = Number(product.salePrice) * data.quantity;
+    const amount = Number(product.salePrice) * data.quantity;
 
-  const [movement] = await prisma.$transaction([
-    prisma.movement.create({
+    const movement = await tx.movement.create({
       data: {
-        clubId: data.clubId,
-        type: 'sale',
+        clubId:        data.clubId,
+        type:          'sale',
         amount,
-        description: `Venta - ${product.name} x${data.quantity}`,
-        productId: data.productId,
-        quantity: data.quantity,
+        description:   `Venta - ${product.name} x${data.quantity}`,
+        productId:     data.productId,
+        quantity:      data.quantity,
         paymentMethod: data.paymentMethod,
-        status: 'active',
+        status:        'active',
       },
-    }),
-    prisma.product.update({
-      where: { id: data.productId },
-      data: { stock: product.stock - data.quantity },
-    }),
-    prisma.stockMovement.create({
+    });
+    await tx.stockMovement.create({
       data: { productId: data.productId, quantity: -data.quantity, type: 'sale' },
-    }),
-  ]);
+    });
 
-  return serialize(movement);
+    return serialize(movement);
+  });
 }
 
 export async function cancelMovement(id: number, clubId: number) {

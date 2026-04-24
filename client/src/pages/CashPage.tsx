@@ -3,6 +3,27 @@ import { useClub } from '../context/ClubContext';
 import * as api from '../api';
 import type { Movement } from '../api';
 
+type DatePreset = 'today' | '7d' | '30d';
+
+const PRESET_LABELS: Record<DatePreset, string> = {
+  today: 'Hoy',
+  '7d': 'Últimos 7 días',
+  '30d': 'Últimos 30 días',
+};
+
+function localISO(d: Date) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function getDateRange(preset: DatePreset): { from: string; to: string } {
+  const today = new Date();
+  const to = localISO(today);
+  if (preset === 'today') return { from: to, to };
+  const from = new Date(today);
+  from.setDate(today.getDate() - (preset === '7d' ? 6 : 29));
+  return { from: localISO(from), to };
+}
+
 function fmtMoney(n: number) {
   return new Intl.NumberFormat('es-AR', {
     style: 'currency', currency: 'ARS', maximumFractionDigits: 0,
@@ -11,10 +32,10 @@ function fmtMoney(n: number) {
 
 function fmtDate(iso: string) {
   const d = new Date(iso);
-  const dd = String(d.getDate()).padStart(2, '0');
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd  = String(d.getDate()).padStart(2, '0');
+  const mm  = String(d.getMonth() + 1).padStart(2, '0');
   const yyyy = d.getFullYear();
-  const hh = String(d.getHours()).padStart(2, '0');
+  const hh  = String(d.getHours()).padStart(2, '0');
   const min = String(d.getMinutes()).padStart(2, '0');
   return `${dd}/${mm}/${yyyy} ${hh}:${min}`;
 }
@@ -119,16 +140,18 @@ export default function CashPage() {
   const [error, setError]         = useState('');
   const [showModal, setShowModal] = useState(false);
   const [acting, setActing]       = useState<number | null>(null);
+  const [preset, setPreset]       = useState<DatePreset>('today');
 
   const fetchMovements = useCallback(() => {
     if (!selectedClubId) return;
+    const { from, to } = getDateRange(preset);
     setLoading(true);
     setError('');
-    api.getMovements(selectedClubId)
+    api.getMovements(selectedClubId, from, to)
       .then(setMovements)
       .catch((e: any) => setError(e.message ?? 'Error al cargar movimientos'))
       .finally(() => setLoading(false));
-  }, [selectedClubId]);
+  }, [selectedClubId, preset]);
 
   useEffect(() => { fetchMovements(); }, [fetchMovements]);
 
@@ -202,6 +225,27 @@ export default function CashPage() {
 
       {selectedClubId && (
         <>
+          {/* Date filter */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-xs font-medium text-gray-500 dark:text-app-muted">Período:</span>
+            {(['today', '7d', '30d'] as DatePreset[]).map((p) => (
+              <button
+                key={p}
+                onClick={() => setPreset(p)}
+                className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
+                  preset === p
+                    ? 'bg-indigo-600 text-white'
+                    : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-app-muted hover:bg-gray-200 dark:hover:bg-slate-600'
+                }`}
+              >
+                {PRESET_LABELS[p]}
+              </button>
+            ))}
+            <span className="text-xs text-gray-400 dark:text-app-muted ml-2">
+              Mostrando: {PRESET_LABELS[preset]}
+            </span>
+          </div>
+
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="bg-white dark:bg-app-card rounded-2xl shadow-sm border border-gray-100 dark:border-app-border p-5 flex flex-col gap-1">
               <p className="text-sm font-medium text-gray-500 dark:text-app-muted">Total efectivo</p>
@@ -244,7 +288,7 @@ export default function CashPage() {
                     </tr>
                   ) : movements.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="px-6 py-8 text-center text-gray-300 dark:text-slate-600">No hay movimientos</td>
+                      <td colSpan={7} className="px-6 py-8 text-center text-gray-300 dark:text-slate-600">Sin movimientos para {PRESET_LABELS[preset].toLowerCase()}</td>
                     </tr>
                   ) : (
                     movements.map((m) => (

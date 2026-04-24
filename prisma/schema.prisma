@@ -63,8 +63,21 @@ model Club {
   cashMovements  CashMovement[]
   products       Product[]
   movements      Movement[]
+  openingHours   OpeningHours[]
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
+}
+
+model OpeningHours {
+  id        Int      @id @default(autoincrement())
+  clubId    Int
+  club      Club     @relation(fields: [clubId], references: [id])
+  dayOfWeek Int?     // 0-6; null for date-specific overrides
+  date      String?  // "YYYY-MM-DD"; null for day-of-week defaults
+  openTime  String   // "HH:mm"
+  closeTime String   // "HH:mm"
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Invitation {
@@ -114,6 +127,7 @@ model FixedReservation {
   timeStart     String   // "HH:MM"
   duration      Int      // minutes
   clientName    String
+  clientPhone   String?
   type          String
   totalPrice    Decimal? @db.Decimal(10, 2)
   depositAmount Decimal? @db.Decimal(10, 2)
@@ -197,6 +211,7 @@ model Reservation {
   playStatus            PlayStatus        @default(scheduled)
   createdByMembershipId Int?
   updatedByMembershipId Int?
+  internalNote          String?
   createdByMembership   Membership?       @relation("CreatedBy", fields: [createdByMembershipId], references: [id])
   updatedByMembership   Membership?       @relation("UpdatedBy", fields: [updatedByMembershipId], references: [id])
   createdAt             DateTime          @default(now())

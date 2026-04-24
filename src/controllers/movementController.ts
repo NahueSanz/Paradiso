@@ -7,7 +7,7 @@ async function getClubId(userId: number): Promise<number | null> {
   return membership?.clubId ?? null;
 }
 
-// GET /movements?clubId=
+// GET /movements?clubId=&from=YYYY-MM-DD&to=YYYY-MM-DD
 export async function listMovements(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const clubId = Number(req.query.clubId);
@@ -15,7 +15,30 @@ export async function listMovements(req: Request, res: Response, next: NextFunct
       res.status(400).json({ message: 'clubId must be a positive integer' });
       return;
     }
-    const movements = await movementService.getMovements(clubId);
+
+    const { from: fromStr, to: toStr } = req.query as { from?: string; to?: string };
+
+    let from: Date | undefined;
+    let to:   Date | undefined;
+
+    if (fromStr || toStr) {
+      if (!fromStr || !toStr) {
+        res.status(400).json({ message: 'Both from and to are required when filtering by date' });
+        return;
+      }
+      from = new Date(`${fromStr}T00:00:00.000Z`);
+      to   = new Date(`${toStr}T23:59:59.999Z`);
+      if (isNaN(from.getTime()) || isNaN(to.getTime())) {
+        res.status(400).json({ message: 'from and to must be valid dates (YYYY-MM-DD)' });
+        return;
+      }
+      if (from > to) {
+        res.status(400).json({ message: 'from must not be after to' });
+        return;
+      }
+    }
+
+    const movements = await movementService.getMovements(clubId, from, to);
     res.json(movements);
   } catch (err) {
     next(err);

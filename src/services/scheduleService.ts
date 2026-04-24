@@ -31,6 +31,7 @@ export interface ScheduleFixedReservation {
   timeEnd: string;       // "HH:MM"  (pre-computed from timeStart + duration)
   duration: number;
   clientName: string;
+  clientPhone: string | null;
   type: string;
   totalPrice: string | null;
   depositAmount: string | null;
@@ -57,7 +58,7 @@ export async function getScheduleByDateAndClub(
 
   // Derive day-of-week from the date string directly (avoids TZ shifts)
   const [year, month, day] = dateStr.split('-').map(Number);
-  const dayOfWeek = new Date(year, month - 1, day).getDay(); // 0 = Sunday
+  const dayOfWeek = new Date(Date.UTC(year, month - 1, day)).getUTCDay(); // 0 = Sunday
 
   // ── normal reservations ──────────────────────────────────────────────────
   const reservations = await prisma.reservation.findMany({
@@ -97,6 +98,7 @@ export async function getScheduleByDateAndClub(
     timeEnd:       computeTimeEnd(f.timeStart, f.duration),
     duration:      f.duration,
     clientName:    f.clientName,
+    clientPhone:   f.clientPhone ?? null,
     type:          f.type,
     totalPrice:    f.totalPrice    != null ? String(f.totalPrice)    : null,
     depositAmount: f.depositAmount != null ? String(f.depositAmount) : null,

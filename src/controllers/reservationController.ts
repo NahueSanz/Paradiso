@@ -194,6 +194,71 @@ export async function updateReservation(
   }
 }
 
+export async function payReservation(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (isNaN(id) || id <= 0) {
+      res.status(400).json({ status: 'error', message: 'Invalid reservation id' });
+      return;
+    }
+
+    const raw = req.body.amount;
+    if (raw === undefined || raw === null || raw === '') {
+      res.status(400).json({ status: 'error', message: 'amount is required' });
+      return;
+    }
+    const amount = Number(raw);
+    if (isNaN(amount) || amount <= 0) {
+      res.status(400).json({ status: 'error', message: 'amount must be a positive number' });
+      return;
+    }
+
+    const reservation = await reservationService.payReservation(
+      id,
+      amount,
+      req.user.id,
+      req.membership?.id,
+    );
+    res.json(reservation);
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function updateReservationNote(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): Promise<void> {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (isNaN(id) || id <= 0) {
+      res.status(400).json({ status: 'error', message: 'Invalid reservation id' });
+      return;
+    }
+
+    const { internalNote } = req.body;
+    if (internalNote !== undefined && internalNote !== null && typeof internalNote !== 'string') {
+      res.status(400).json({ status: 'error', message: 'internalNote must be a string or null' });
+      return;
+    }
+
+    const reservation = await reservationService.updateReservationNote(
+      id,
+      typeof internalNote === 'string' ? internalNote : null,
+      req.user.id,
+      req.membership?.id,
+    );
+    res.json(reservation);
+  } catch (err) {
+    next(err);
+  }
+}
+
 export async function deleteReservation(
   req: Request,
   res: Response,

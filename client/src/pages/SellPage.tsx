@@ -109,67 +109,83 @@ export default function SellPage() {
     if (cartItems.length === 0) return;
     setSelling(true);
     setError('');
-    try {
-      await Promise.all(
-        cartItems.map((item) => api.createSaleMovement({ ...item, paymentMethod }))
-      );
+
+    const errors: string[] = [];
+    for (const item of cartItems) {
+      try {
+        await api.createSaleMovement({ ...item, paymentMethod });
+      } catch (e: any) {
+        const product = products.find((p) => p.id === item.productId);
+        const label   = product?.name ?? `Producto ${item.productId}`;
+        errors.push(`${label}: ${e.message ?? 'Error desconocido'}`);
+      }
+    }
+
+    fetchProducts();
+
+    if (errors.length) {
+      setError(errors.join('\n'));
+    } else {
       setCart({});
       setSuccessMsg('¡Venta registrada!');
       setTimeout(() => setSuccessMsg(''), 3000);
-      fetchProducts();
-    } catch (e: any) {
-      setError(e.message ?? 'Error al vender');
-    } finally {
-      setSelling(false);
     }
+
+    setSelling(false);
   }
 
   return (
-    <div className="p-6 max-w-5xl mx-auto space-y-6 pb-32">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-app-text">Vender productos</h1>
-        <p className="text-sm text-gray-500 dark:text-app-muted mt-0.5">Seleccioná la cantidad de cada producto y presioná Vender</p>
-      </div>
+    <div className="h-full flex flex-col overflow-hidden">
+      {/* Scrollable product list */}
+      <div className="flex-1 overflow-y-auto">
+        <div className="p-6 max-w-5xl mx-auto space-y-6">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-app-text">Vender productos</h1>
+            <p className="text-sm text-gray-500 dark:text-app-muted mt-0.5">Seleccioná la cantidad de cada producto y presioná Vender</p>
+          </div>
 
-      {!selectedClubId && (
-        <div className="flex flex-col items-center justify-center py-24 text-center gap-3">
-          <p className="text-lg font-semibold text-gray-700 dark:text-app-text">Seleccioná un club</p>
-        </div>
-      )}
-
-      {error && (
-        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 rounded-xl px-4 py-3 text-sm">{error}</div>
-      )}
-
-      {successMsg && (
-        <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 rounded-xl px-4 py-3 text-sm font-medium">
-          {successMsg}
-        </div>
-      )}
-
-      {selectedClubId && (
-        <div className="bg-white dark:bg-app-card rounded-2xl shadow-sm border border-gray-100 dark:border-app-border overflow-hidden">
-          {loading ? (
-            <div className="px-6 py-8 text-center text-gray-300 dark:text-slate-600 text-sm">Cargando…</div>
-          ) : products.length === 0 ? (
-            <div className="px-6 py-8 text-center text-gray-300 dark:text-slate-600 text-sm">
-              No hay productos. Agregá productos desde Stock.
+          {!selectedClubId && (
+            <div className="flex flex-col items-center justify-center py-24 text-center gap-3">
+              <p className="text-lg font-semibold text-gray-700 dark:text-app-text">Seleccioná un club</p>
             </div>
-          ) : (
-            products.map((p) => (
-              <ProductRow
-                key={p.id}
-                product={p}
-                qty={cart[p.id] ?? 0}
-                onQtyChange={handleQtyChange}
-              />
-            ))
+          )}
+
+          {error && (
+            <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 rounded-xl px-4 py-3 text-sm">{error}</div>
+          )}
+
+          {successMsg && (
+            <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-300 rounded-xl px-4 py-3 text-sm font-medium">
+              {successMsg}
+            </div>
+          )}
+
+          {selectedClubId && (
+            <div className="bg-white dark:bg-app-card rounded-2xl shadow-sm border border-gray-100 dark:border-app-border overflow-hidden">
+              {loading ? (
+                <div className="px-6 py-8 text-center text-gray-300 dark:text-slate-600 text-sm">Cargando…</div>
+              ) : products.length === 0 ? (
+                <div className="px-6 py-8 text-center text-gray-300 dark:text-slate-600 text-sm">
+                  No hay productos. Agregá productos desde Stock.
+                </div>
+              ) : (
+                products.map((p) => (
+                  <ProductRow
+                    key={p.id}
+                    product={p}
+                    qty={cart[p.id] ?? 0}
+                    onQtyChange={handleQtyChange}
+                  />
+                ))
+              )}
+            </div>
           )}
         </div>
-      )}
+      </div>
 
+      {/* Checkout bar — pinned at bottom via flex, no fixed positioning */}
       {selectedClubId && (
-        <div className="fixed bottom-0 left-0 right-0 bg-white dark:bg-app-surface border-t border-gray-200 dark:border-app-border shadow-lg px-6 py-4 z-50">
+        <div className="shrink-0 bg-white dark:bg-app-surface border-t border-gray-200 dark:border-app-border shadow-lg px-6 py-4">
           <div className="max-w-5xl mx-auto flex flex-col sm:flex-row items-center gap-4">
             <div className="flex-1 text-center sm:text-left">
               <span className="text-xs text-gray-500 dark:text-app-muted uppercase tracking-wide">Total</span>

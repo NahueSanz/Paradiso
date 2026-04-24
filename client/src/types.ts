@@ -44,6 +44,7 @@ export interface Reservation {
   totalPrice: string | null;
   depositAmount: string | null;
   paidAmount: string | null;
+  internalNote: string | null;
   paymentStatus: PaymentStatus;
   playStatus: PlayStatus;
   court: { id: number; name: string };
@@ -67,6 +68,7 @@ export interface VirtualFixedReservation {
   readonly timeStart: string;       // "HH:MM"
   readonly timeEnd: string;         // "HH:MM"
   readonly clientName: string;
+  readonly clientPhone: string | null;
   readonly type: string | null;
   readonly isFixed: true;
   readonly paymentStatus: PaymentStatus;
@@ -89,6 +91,7 @@ export interface FixedReservation {
   timeEnd: string;   // "HH:MM" — computed server-side (timeStart + duration)
   duration: number;  // minutes
   clientName: string;
+  clientPhone: string | null;
   type: string | null;
   totalPrice: string | null;
   depositAmount: string | null;

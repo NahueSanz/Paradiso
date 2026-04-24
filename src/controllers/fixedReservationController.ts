@@ -76,7 +76,7 @@ export async function createFixedReservation(
   next: NextFunction,
 ): Promise<void> {
   try {
-    const { courtId, dayOfWeek, timeStart, duration, clientName, type, totalPrice, depositAmount } = req.body;
+    const { courtId, dayOfWeek, timeStart, duration, clientName, clientPhone, type, totalPrice, depositAmount } = req.body;
     const parsedDuration = Number(duration);
 
     const errors: string[] = [];
@@ -97,6 +97,11 @@ export async function createFixedReservation(
     }
     if (!clientName || typeof clientName !== 'string' || clientName.trim() === '') {
       errors.push('clientName is required');
+    }
+    if (clientPhone !== undefined && clientPhone !== null && clientPhone !== '') {
+      if (typeof clientPhone !== 'string' || clientPhone.length > 20 || !/^[0-9 +\-]+$/.test(clientPhone)) {
+        errors.push('clientPhone must be a valid phone (digits, spaces, + and -, max 20 chars)');
+      }
     }
     if (!type || typeof type !== 'string' || type.trim() === '') {
       errors.push('type is required');
@@ -126,6 +131,7 @@ export async function createFixedReservation(
         timeStart,
         duration: parsedDuration,
         clientName: clientName.trim(),
+        clientPhone: (typeof clientPhone === 'string' && clientPhone.trim()) ? clientPhone.trim() : null,
         type: type.trim(),
         totalPrice:    priceResult.value   ?? undefined,
         depositAmount: depositResult.value ?? undefined,
@@ -152,12 +158,17 @@ export async function updateFixedReservation(
       return;
     }
 
-    const { clientName, timeStart, duration, type, totalPrice, depositAmount } = req.body;
+    const { clientName, clientPhone, timeStart, duration, type, totalPrice, depositAmount } = req.body;
     const parsedDuration = Number(duration);
     const errors: string[] = [];
 
     if (!clientName || typeof clientName !== 'string' || clientName.trim() === '') {
       errors.push('clientName is required');
+    }
+    if (clientPhone !== undefined && clientPhone !== null && clientPhone !== '') {
+      if (typeof clientPhone !== 'string' || clientPhone.length > 20 || !/^[0-9 +\-]+$/.test(clientPhone)) {
+        errors.push('clientPhone must be a valid phone (digits, spaces, + and -, max 20 chars)');
+      }
     }
     if (!timeStart || !TIME_REGEX.test(timeStart)) {
       errors.push('timeStart is required (HH:MM)');
@@ -189,6 +200,7 @@ export async function updateFixedReservation(
       id,
       {
         clientName: clientName.trim(),
+        clientPhone: (typeof clientPhone === 'string' && clientPhone.trim()) ? clientPhone.trim() : null,
         timeStart,
         duration: parsedDuration,
         type: typeof type === 'string' ? type.trim() : '',

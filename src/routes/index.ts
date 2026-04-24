@@ -12,6 +12,7 @@ import scheduleRoutes from "./scheduleRoutes";
 import cashRoutes from "./cashRoutes";
 import productRoutes from "./productRoutes";
 import movementRoutes from "./movementRoutes";
+import openingHoursRoutes from "./openingHoursRoutes";
 import { authenticate } from "../middlewares/authenticate";
 import { acceptInvitation } from "../controllers/invitationController";
 
@@ -35,5 +36,6 @@ router.use("/schedule", scheduleRoutes);
 router.use("/cash", cashRoutes);
 router.use("/products", productRoutes);
 router.use("/movements", movementRoutes);
+router.use("/opening-hours", openingHoursRoutes);
 
 export default router;

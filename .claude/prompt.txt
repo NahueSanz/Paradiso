@@ -1,85 +1,159 @@
-We need to FIX the cash movement creation flow properly.
+You are working on a full-stack TypeScript app (React + Node + Prisma).
 
---------------------------------
-CURRENT PROBLEM
---------------------------------
+We need to fully implement **client phone number support for reservations** (both regular and fixed reservations).
 
-POST /cash fails with:
+This must be consistent across:
 
-"clubId must be a positive integer"
+* Database (Prisma)
+* Backend services/controllers
+* Frontend forms (ReservationModal and FixedReservationModal)
+* UI display
 
-The frontend is not sending clubId.
+---
 
-BUT we do NOT want to hardcode or send clubId from the frontend.
+## 1. DATABASE (Prisma)
 
---------------------------------
-GOAL
---------------------------------
+Update both models:
 
-Make the system correctly resolve clubId from the authenticated user.
+model Reservation {
+...
+clientPhone String?  // optional but recommended
+}
 
-Frontend should NOT send clubId.
+model FixedReservation {
+...
+clientPhone String?
+}
 
-Backend must determine clubId automatically.
+* Run migration
+* Ensure existing data is not broken
 
---------------------------------
-CONTEXT
---------------------------------
+---
 
-We already have:
+## 2. BACKEND
 
-- User authentication (req.user)
-- Membership model (userId + clubId)
-- Users belong to clubs via Membership
+### Controllers:
 
---------------------------------
-TASK — BACKEND
---------------------------------
+* Accept `clientPhone` in:
 
-1. Modify POST /cash controller:
+  * createReservation
+  * updateReservation
+  * createFixedReservation
+  * updateFixedReservation
 
-- Remove clubId from request body validation
-- Do NOT expect clubId from frontend
+Validate:
 
-2. Resolve clubId using the authenticated user:
+* Optional field
+* If present → must be a valid phone format (basic validation is fine)
 
-- Use req.user.id
-- Find Membership:
+Example:
 
-  prisma.membership.findFirst({
-    where: { userId: req.user.id }
-  })
+* Allow digits, spaces, +, -
+* Reject empty string → store as null
 
-- Extract clubId from membership
+---
 
-3. If no membership exists:
-   → throw 403 Forbidden
+### Services:
 
-4. Use this clubId when creating the cash movement
+* Persist `clientPhone` correctly
+* Include it in all returned objects
 
---------------------------------
-TASK — FRONTEND
---------------------------------
+---
 
-1. Ensure POST /cash request DOES NOT include clubId
+## 3. FRONTEND — FORMS
 
-2. Do NOT add any hardcoded values
+### ReservationModal.tsx
 
---------------------------------
-IMPORTANT
---------------------------------
+### FixedReservationModal.tsx
 
-- Do NOT break existing logic
-- Do NOT refactor unrelated code
-- Keep solution minimal and correct
-- Assume 1 user = 1 active club (for now)
+Add a new input:
 
---------------------------------
-OUTPUT
---------------------------------
+Label:
+"Teléfono (opcional)"
 
-Show:
+Input:
 
-1. Updated controller code for POST /cash
-2. Any necessary service changes
-3. Confirmation that frontend does not need changes
+* type="tel"
+* placeholder="11 1234-5678"
+
+State:
+const [clientPhone, setClientPhone] = useState('')
+
+Validation:
+
+* Optional
+* If filled → basic format check
+
+---
+
+### IMPORTANT:
+
+Include it in payloads:
+
+createReservation({
+...
+clientPhone: clientPhone.trim() || undefined
+})
+
+Same for:
+
+* updateReservation
+* createFixedReservation
+* updateFixedReservation
+
+---
+
+## 4. UI DISPLAY
+
+In schedule grid / reservation cards:
+
+Show phone under client name:
+
+Juan Pérez
+📞 11 1234-5678
+
+* Only render if exists
+* Use subtle styling (text-xs, muted color)
+
+---
+
+## 5. EDIT MODE
+
+When editing a reservation:
+
+* Pre-fill phone number correctly
+
+---
+
+## 6. OPTIONAL UX IMPROVEMENT (VERY NICE)
+
+Make phone clickable:
+
+<a href={`https://wa.me/54${phoneSanitized}`}>
+📞 {clientPhone} </a>
+
+* Strip spaces/dashes
+* Assume Argentina (+54)
+
+---
+
+## 7. EDGE CASES
+
+* Empty string → store null
+* Editing → allow clearing the phone
+* Do NOT break existing reservations
+
+---
+
+## 8. FINAL CHECK
+
+Verify:
+
+* Create reservation with phone ✅
+* Edit reservation updates phone ✅
+* Fixed reservations support phone ✅
+* Phone shows in UI ✅
+
+---
+
+Keep styling consistent with the existing dark mode system.

@@ -201,6 +201,7 @@ export interface UpdateReservationInput {
   totalPrice?: number | null;
   depositAmount?: number | null;
   paidAmount?: number | null;
+  internalNote?: string | null;
   status?: ReservationStatus;
   type?: ReservationType;
   paymentStatus?: PaymentStatus;
@@ -259,6 +260,7 @@ export async function updateReservation(id: number, input: UpdateReservationInpu
     date: Date; timeStart: Date; timeEnd: Date;
     clientName: string; clientPhone: string | null;
     totalPrice: number | null; depositAmount: number | null; paidAmount: number | null;
+    internalNote: string | null;
     status: ReservationStatus; type: ReservationType;
     paymentStatus: PaymentStatus; playStatus: PlayStatus;
     updatedByMembershipId: number | null;
@@ -273,6 +275,7 @@ export async function updateReservation(id: number, input: UpdateReservationInpu
   if (input.totalPrice !== undefined) data.totalPrice = input.totalPrice;
   if (input.depositAmount !== undefined) data.depositAmount = input.depositAmount;
   if (resolvedPaidAmount !== undefined) data.paidAmount = resolvedPaidAmount;
+  if (input.internalNote !== undefined) data.internalNote = input.internalNote;
 
   if (input.status !== undefined) data.status = input.status;
   if (input.type !== undefined) data.type = input.type;
@@ -286,6 +289,97 @@ export async function updateReservation(id: number, input: UpdateReservationInpu
   const result = await prisma.reservation.update({
     where: { id },
     data,
+    include: {
+      court: { select: { id: true, name: true } },
+      createdByMembership: membershipSelect,
+      updatedByMembership: membershipSelect,
+    },
+  });
+
+  return withRemainingAmount(result);
+}
+
+export async function payReservation(
+  id: number,
+  amount: number,
+  userId: number,
+  membershipId?: number,
+) {
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw new AppError('amount must be a positive number', 400);
+  }
+
+  const existing = await prisma.reservation.findUnique({
+    where: { id },
+    include: { court: { select: { club: { select: { ownerId: true, employees: { select: { id: true } } } } } } },
+  });
+  if (!existing) throw new AppError('Reservation not found', 404);
+
+  const isOwner    = existing.court.club.ownerId === userId;
+  const isEmployee = existing.court.club.employees.some((e) => e.id === userId);
+  if (!isOwner && !isEmployee) throw new AppError('Forbidden', 403);
+
+  if (existing.status === ReservationStatus.cancelled) {
+    throw new AppError('Cannot modify a cancelled reservation', 400);
+  }
+
+  const total      = existing.totalPrice  != null ? Number(existing.totalPrice)  : null;
+  const currentPaid = existing.paidAmount != null ? Number(existing.paidAmount)  : 0;
+  const newPaid     = currentPaid + amount;
+
+  if (total !== null && newPaid > total + 0.005) {
+    throw new AppError(
+      `El pago de ${amount} supera el total restante de ${Math.max(0, total - currentPaid).toFixed(2)}`,
+      400,
+    );
+  }
+
+  const newPaymentStatus: PaymentStatus =
+    total !== null && newPaid >= total - 0.005
+      ? PaymentStatus.paid
+      : newPaid > 0
+        ? PaymentStatus.partial
+        : PaymentStatus.pending;
+
+  const result = await prisma.reservation.update({
+    where: { id },
+    data: {
+      paidAmount:           newPaid,
+      paymentStatus:        newPaymentStatus,
+      updatedByMembershipId: membershipId ?? null,
+    },
+    include: {
+      court: { select: { id: true, name: true } },
+      createdByMembership: membershipSelect,
+      updatedByMembership: membershipSelect,
+    },
+  });
+
+  return withRemainingAmount(result);
+}
+
+export async function updateReservationNote(
+  id: number,
+  internalNote: string | null,
+  userId: number,
+  membershipId?: number,
+) {
+  const existing = await prisma.reservation.findUnique({
+    where: { id },
+    include: { court: { select: { club: { select: { ownerId: true, employees: { select: { id: true } } } } } } },
+  });
+  if (!existing) throw new AppError('Reservation not found', 404);
+
+  const isOwner    = existing.court.club.ownerId === userId;
+  const isEmployee = existing.court.club.employees.some((e) => e.id === userId);
+  if (!isOwner && !isEmployee) throw new AppError('Forbidden', 403);
+
+  const result = await prisma.reservation.update({
+    where: { id },
+    data: {
+      internalNote:          internalNote ?? null,
+      updatedByMembershipId: membershipId ?? null,
+    },
     include: {
       court: { select: { id: true, name: true } },
       createdByMembership: membershipSelect,
