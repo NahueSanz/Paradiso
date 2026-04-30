@@ -29,7 +29,6 @@ interface Props {
   onPayAmount: (id: number, amount: number) => Promise<Reservation>;
   onUpdateNote: (id: number, note: string | null) => Promise<void>;
   onDelete: (id: number) => Promise<void>;
-  onFixedSuccess?: () => void;
 }
 
 // ── constantes ────────────────────────────────────────────────────────────────
@@ -105,7 +104,6 @@ export default function ReservationModal({
   onPayAmount,
   onUpdateNote,
   onDelete,
-  onFixedSuccess,
 }: Props) {
   const { reservation, courtName, date, slot } = state;
   const isEdit = !!reservation;
@@ -256,7 +254,6 @@ export default function ReservationModal({
           if (res?.warning) {
             setFixedWarning(true);
           } else {
-            onFixedSuccess?.();
             onClose();
           }
         })
@@ -540,7 +537,7 @@ export default function ReservationModal({
             />
           </div>
 
-          {/* Teléfono (opcional) */}
+          {/* Teléfono */}
           <div>
             <label className="block text-xs font-medium text-muted-foreground mb-1">
               Teléfono <span className="text-red-400">*</span>

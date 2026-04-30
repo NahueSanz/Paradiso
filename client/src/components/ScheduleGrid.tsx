@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { getSchedule } from '../api';
 import type {
   Court,
+  NormalizedReservation,
   Reservation,
   ScheduleEntry,
   TimeSlot,
@@ -27,6 +28,13 @@ function slotToVirtualMinutes(slot: TimeSlot, openVirtual: number): number {
 
 function toHHMM(timeStr: string): string {
   return timeStr.length > 5 ? timeStr.slice(11, 16) : timeStr.slice(0, 5);
+}
+
+function computeDuration(timeStart: string, timeEnd: string): number {
+  const startMin = toVirtualMinutes(timeStart, 0);
+  let   endMin   = toVirtualMinutes(timeEnd, 0);
+  if (endMin <= startMin) endMin += 24 * 60;
+  return endMin - startMin;
 }
 
 function computeTimeEnd(timeStart: string, duration: number): string {
@@ -268,11 +276,17 @@ export default function ScheduleGrid({
       .then(({ reservations, fixedReservations }) => {
         if (cancelled) return;
 
+        // Normalize regular reservations: compute duration from timeStart/timeEnd
+        const normalized: NormalizedReservation[] = reservations.map((r) => ({
+          ...r,
+          duration: computeDuration(r.timeStart, r.timeEnd),
+        }));
+
         // Transform fixed reservations into virtual entries
         const virtual = fixedReservations.map((f) => toVirtual(f));
 
         // Merge and sort by courtId then timeStart (virtual minutes)
-        const merged: ScheduleEntry[] = [...reservations, ...virtual].sort((a, b) => {
+        const merged: ScheduleEntry[] = [...normalized, ...virtual].sort((a, b) => {
           if (a.courtId !== b.courtId) return a.courtId - b.courtId;
           return toVirtualMinutes(a.timeStart, openVirtual) - toVirtualMinutes(b.timeStart, openVirtual);
         });

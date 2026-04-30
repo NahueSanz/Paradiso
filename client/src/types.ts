@@ -68,7 +68,6 @@ export interface VirtualFixedReservation {
   readonly dayOfWeek: number;
   readonly duration: number;        // minutes
   readonly timeStart: string;       // "HH:MM"
-  readonly timeEnd: string;         // "HH:MM"
   readonly clientName: string;
   readonly clientPhone: string | null;
   readonly type: string | null;
@@ -81,8 +80,14 @@ export interface VirtualFixedReservation {
   readonly court: { id: number; name: string };
 }
 
+/**
+ * Reservation normalized for grid use: timeEnd is consumed to produce duration
+ * so that all grid entries share the same { timeStart, duration } shape.
+ */
+export type NormalizedReservation = Reservation & { readonly duration: number };
+
 /** Union of normal and virtual-fixed reservations — used throughout the grid. */
-export type ScheduleEntry = Reservation | VirtualFixedReservation;
+export type ScheduleEntry = NormalizedReservation | VirtualFixedReservation;
 
 export interface FixedReservation {
   id: number;

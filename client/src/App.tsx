@@ -656,7 +656,6 @@ export default function App() {
           onPayAmount={handlePayAmount}
           onUpdateNote={handleUpdateNote}
           onDelete={handleDelete}
-          onFixedSuccess={refresh}
         />
       )}
 
