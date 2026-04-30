@@ -64,6 +64,7 @@ async function generatePDF(
   totalByCategory: Record<string, number>,
   reservationRows: ReservationReportRow[],
   cashMovements: CashMovement[],
+  clubName: string,
 ) {
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
   const pageW = doc.internal.pageSize.getWidth();
@@ -83,7 +84,7 @@ async function generatePDF(
       doc.setFontSize(7);
       doc.setFont('helvetica', 'normal');
       doc.setTextColor(156, 163, 175);
-      doc.text('Generado automáticamente por el sistema · Padel Paradiso', marginL, pageH - 6);
+      doc.text(`Generado automáticamente por el sistema · ${clubName}`, marginL, pageH - 6);
       doc.text(`Página ${i} de ${pageCount}`, pageW - marginR - 20, pageH - 6);
     }
   };
@@ -97,7 +98,7 @@ async function generatePDF(
   doc.text(MODE_TITLE[mode], marginL, 12);
   doc.setFontSize(10);
   doc.setFont('helvetica', 'normal');
-  doc.text('Padel Paradiso', marginL, 19);
+  doc.text(clubName, marginL, 19);
   doc.setFontSize(9);
   doc.setTextColor(209, 213, 219);
   doc.text(`Período: ${fmtDateFull(from)} — ${fmtDateFull(to)}`, marginL, 25);
@@ -132,12 +133,15 @@ async function generatePDF(
       ]
     : mode === 'cash'
       ? [
-          ['productos', 'Productos', [16, 185, 129]],
-          ['egresos',   'Egresos',   [239, 68, 68]],
+          ['alquileres', 'Alquileres', [59, 130, 246]],
+          ['productos',  'Productos',  [16, 185, 129]],
+          ['otros',      'Otros',      [245, 158, 11]],
+          ['egresos',    'Egresos',    [239, 68, 68]],
         ]
       : [
           ['reservas',  'Reservas',  [59, 130, 246]],
           ['productos', 'Productos', [16, 185, 129]],
+          ['otros',     'Otros',     [245, 158, 11]],
           ['egresos',   'Egresos',   [239, 68, 68]],
         ];
 
@@ -272,13 +276,16 @@ const COURTS_META: Record<string, CatMeta> = {
 };
 
 const CASH_META: Record<string, CatMeta> = {
-  productos: { label: 'Productos', color: '#10B981' },
-  egresos:   { label: 'Egresos',   color: '#EF4444' },
+  alquileres: { label: 'Alquileres', color: '#3B82F6' },
+  productos:  { label: 'Productos',  color: '#10B981' },
+  otros:      { label: 'Otros',      color: '#F59E0B' },
+  egresos:    { label: 'Egresos',    color: '#EF4444' },
 };
 
 const COMBINED_META: Record<string, CatMeta> = {
   reservas:  { label: 'Reservas',  color: '#3B82F6' },
   productos: { label: 'Productos', color: '#10B981' },
+  otros:     { label: 'Otros',     color: '#F59E0B' },
   egresos:   { label: 'Egresos',   color: '#EF4444' },
 };
 
@@ -321,7 +328,17 @@ function computeUnifiedDays(
       const date = m.createdAt.slice(0, 10);
       const cats = dateMap.get(date) ?? {};
       if (m.type === 'income') {
-        cats.productos = (cats.productos ?? 0) + m.amount;
+        if (m.relatedProductId) {
+          cats.productos = (cats.productos ?? 0) + m.amount;
+        } else if (m.fixedReservationInstanceId != null || m.relatedReservationId != null) {
+          if (mode === 'cash') {
+            // In 'cash' mode show rental payments as alquileres
+            cats.alquileres = (cats.alquileres ?? 0) + m.amount;
+          }
+          // In 'combined' mode, rentals are already counted via revenueData → skip to avoid double-count
+        } else {
+          cats.otros = (cats.otros ?? 0) + m.amount;
+        }
       } else {
         cats.egresos = (cats.egresos ?? 0) + m.amount;
       }
@@ -348,9 +365,9 @@ function StatCard({
   label, value, color, pct,
 }: { label: string; value: number; color: string; pct: number }) {
   return (
-    <div className="bg-white dark:bg-app-card rounded-2xl shadow-sm border border-gray-100 dark:border-app-border p-5 flex flex-col gap-2">
+    <div className="bg-card rounded-2xl shadow-sm border border-border p-5 flex flex-col gap-2">
       <div className="flex items-center justify-between">
-        <span className="text-sm font-medium text-gray-500 dark:text-app-muted">{label}</span>
+        <span className="text-sm font-medium text-muted-foreground">{label}</span>
         <span
           className="text-xs font-semibold px-2 py-0.5 rounded-full"
           style={{ background: `${color}22`, color }}
@@ -358,8 +375,8 @@ function StatCard({
           {pct.toFixed(1)}%
         </span>
       </div>
-      <p className="text-2xl font-bold text-gray-900 dark:text-app-text">{fmtCurrency(value)}</p>
-      <div className="h-1.5 rounded-full bg-gray-100 dark:bg-slate-700 overflow-hidden">
+      <p className="text-2xl font-bold text-foreground">{fmtCurrency(value)}</p>
+      <div className="h-1.5 rounded-full bg-muted overflow-hidden">
         <div className="h-full rounded-full" style={{ width: `${Math.min(pct, 100)}%`, background: color }} />
       </div>
     </div>
@@ -369,13 +386,13 @@ function StatCard({
 function CustomTooltip({ active, payload, label, meta }: any) {
   if (!active || !payload?.length) return null;
   return (
-    <div className="bg-white dark:bg-app-card border border-gray-200 dark:border-app-border rounded-xl shadow-lg px-4 py-3 text-sm">
-      <p className="font-semibold text-gray-700 dark:text-app-text mb-2">{label}</p>
+    <div className="bg-card border border-border rounded-xl shadow-lg px-4 py-3 text-sm">
+      <p className="font-semibold text-foreground mb-2">{label}</p>
       {payload.map((p: any) => (
         <div key={p.dataKey} className="flex items-center gap-2 mb-1">
           <span className="w-2.5 h-2.5 rounded-full" style={{ background: p.color }} />
-          <span className="text-gray-600 dark:text-app-muted">{meta[p.dataKey]?.label ?? p.dataKey}:</span>
-          <span className="font-medium text-gray-900 dark:text-app-text">{fmtCurrency(p.value)}</span>
+          <span className="text-muted-foreground">{meta[p.dataKey]?.label ?? p.dataKey}:</span>
+          <span className="font-medium text-foreground">{fmtCurrency(p.value)}</span>
         </div>
       ))}
     </div>
@@ -387,7 +404,8 @@ function CustomTooltip({ active, payload, label, meta }: any) {
 export default function Dashboard() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { selectedClubId } = useClub();
+  const { clubs, selectedClubId } = useClub();
+  const selectedClubName = clubs.find((c) => c.id === selectedClubId)?.name ?? 'ClubFlow';
 
 
 
@@ -472,7 +490,7 @@ export default function Dashboard() {
       if (mode === 'courts' || mode === 'combined') {
         reservationRows = await api.getReservationsReport(from, to, selectedClubId);
       }
-      await generatePDF(mode, from, to, grandTotal, totalByCategory, reservationRows, cashMovements);
+      await generatePDF(mode, from, to, grandTotal, totalByCategory, reservationRows, cashMovements, selectedClubName);
     } catch (e: any) {
       setError(e.message ?? 'Error al generar el PDF');
     } finally {
@@ -485,42 +503,42 @@ export default function Dashboard() {
   const catColCount = Object.keys(activeMeta).length + 2; // date + cats + total
 
   return (
-    <div className="min-h-full bg-gray-50 dark:bg-gray-900">
+    <div className="min-h-full bg-background">
       {/* ── Page header ── */}
-      <div className="bg-white dark:bg-gray-800 border-b border-gray-100 dark:border-gray-700 px-6 py-4">
+      <div className="bg-card border-b border-border px-6 py-4">
         <div className="flex items-center justify-between gap-4 flex-wrap">
-          <h1 className="text-xl font-bold text-gray-800 dark:text-gray-100">Ingresos</h1>
+          <h1 className="text-xl font-bold text-foreground">Ingresos</h1>
 
           <div className="flex items-center gap-3 flex-wrap">
             {/* date range */}
             <div className={`flex items-center gap-2 border rounded-xl px-3 py-1.5 transition-colors ${
               rangeInvalid
                 ? 'border-red-300 bg-red-50'
-                : 'border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700'
+                : 'border-input bg-muted'
             }`}>
               <svg className="w-4 h-4 text-gray-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                   d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
               </svg>
               <div className="flex flex-col">
-                <label className="text-[10px] font-medium uppercase tracking-wide leading-none mb-0.5 text-gray-400">
+                <label className="text-[10px] font-medium uppercase tracking-wide leading-none mb-0.5 text-muted-foreground">
                   Desde
                 </label>
                 <input
                   type="date" value={from} max={to || undefined}
                   onChange={(e) => setFrom(e.target.value)}
-                  className={`bg-transparent text-sm focus:outline-none w-32 dark:text-gray-100 ${rangeInvalid ? 'text-red-600' : ''}`}
+                  className={`bg-transparent text-sm focus:outline-none w-32 text-foreground ${rangeInvalid ? 'text-red-600' : ''}`}
                 />
               </div>
               <span className="text-gray-300">→</span>
               <div className="flex flex-col">
-                <label className="text-[10px] font-medium uppercase tracking-wide leading-none mb-0.5 text-gray-400">
+                <label className="text-[10px] font-medium uppercase tracking-wide leading-none mb-0.5 text-muted-foreground">
                   Hasta
                 </label>
                 <input
                   type="date" value={to} min={from || undefined}
                   onChange={(e) => setTo(e.target.value)}
-                  className="bg-transparent text-sm focus:outline-none w-32 dark:text-gray-100"
+                  className="bg-transparent text-sm focus:outline-none w-32 text-foreground"
                 />
               </div>
             </div>
@@ -535,8 +553,8 @@ export default function Dashboard() {
                 <button
                   key={label}
                   onClick={() => { setFrom(isoMinus(days)); setTo(todayISO()); }}
-                  className="text-xs px-2.5 py-1.5 rounded-lg border border-gray-200 dark:border-gray-600
-                             text-gray-500 dark:text-gray-400 hover:border-indigo-400 hover:text-indigo-600
+                  className="text-xs px-2.5 py-1.5 rounded-lg border border-border
+                             text-muted-foreground hover:border-indigo-400 hover:text-indigo-600
                              hover:bg-indigo-50 dark:hover:bg-indigo-900/30 transition-colors"
                 >
                   {label}
@@ -550,8 +568,8 @@ export default function Dashboard() {
               disabled={exporting || loading || rangeInvalid}
               className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border font-medium transition-colors
                          disabled:opacity-50 disabled:cursor-not-allowed
-                         border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-300
-                         bg-white dark:bg-gray-700 hover:border-gray-400 hover:bg-gray-50 dark:hover:bg-gray-600"
+                         border-border text-muted-foreground
+                         bg-card hover:border-border/80 hover:bg-muted"
             >
               {exporting ? (
                 <>
@@ -579,7 +597,7 @@ export default function Dashboard() {
 
         {/* ── mode selector ── */}
         <div className="flex justify-center">
-          <div className="inline-flex rounded-xl border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 p-1 gap-1">
+          <div className="inline-flex rounded-xl border border-border bg-muted p-1 gap-1">
             {([
               { key: 'courts',   label: 'Alquileres' },
               { key: 'cash',     label: 'Caja' },
@@ -590,8 +608,8 @@ export default function Dashboard() {
                 onClick={() => setMode(key)}
                 className={`px-5 py-1.5 text-sm font-medium rounded-lg transition-all ${
                   mode === key
-                    ? 'bg-white dark:bg-slate-700 text-indigo-700 dark:text-indigo-400 shadow-sm border border-gray-200 dark:border-slate-600'
-                    : 'text-gray-500 dark:text-slate-400 hover:text-gray-700 dark:hover:text-slate-200'
+                    ? 'bg-background text-indigo-700 dark:text-indigo-400 shadow-sm border border-border'
+                    : 'text-muted-foreground hover:text-foreground'
                 }`}
               >
                 {label}
@@ -603,8 +621,8 @@ export default function Dashboard() {
         {/* ── no club selected ── */}
         {!selectedClubId && (
           <div className="flex flex-col items-center justify-center py-24 text-center gap-3">
-            <p className="text-lg font-semibold text-gray-700 dark:text-app-text">Seleccioná un club para ver los ingresos</p>
-            <p className="text-sm text-gray-400 dark:text-app-muted">Usá el selector de club en la barra superior.</p>
+            <p className="text-lg font-semibold text-foreground">Seleccioná un club para ver los ingresos</p>
+            <p className="text-sm text-muted-foreground">Usá el selector de club en la barra superior.</p>
           </div>
         )}
 
@@ -642,36 +660,36 @@ export default function Dashboard() {
           </div>
 
           {/* best day */}
-          <div className="bg-white dark:bg-app-card rounded-2xl shadow-sm border border-gray-100 dark:border-app-border p-5 flex flex-col gap-1">
-            <p className="text-gray-500 dark:text-app-muted text-sm font-medium">Mejor día</p>
-            <p className="text-2xl font-bold text-gray-900 dark:text-app-text">
+          <div className="bg-card rounded-2xl shadow-sm border border-border p-5 flex flex-col gap-1">
+            <p className="text-muted-foreground text-sm font-medium">Mejor día</p>
+            <p className="text-2xl font-bold text-foreground">
               {loading ? '—' : fmtCurrency(bestDay.totalIncome)}
             </p>
-            <p className="text-gray-400 dark:text-slate-500 text-xs">
+            <p className="text-muted-foreground text-xs">
               {bestDay.date !== '-' ? fmtDate(bestDay.date) : 'Sin datos'}
             </p>
           </div>
 
           {/* active days */}
-          <div className="bg-white dark:bg-app-card rounded-2xl shadow-sm border border-gray-100 dark:border-app-border p-5 flex flex-col gap-1">
-            <p className="text-gray-500 dark:text-app-muted text-sm font-medium">Días con ingresos</p>
-            <p className="text-2xl font-bold text-gray-900 dark:text-app-text">
+          <div className="bg-card rounded-2xl shadow-sm border border-border p-5 flex flex-col gap-1">
+            <p className="text-muted-foreground text-sm font-medium">Días con ingresos</p>
+            <p className="text-2xl font-bold text-foreground">
               {loading ? '—' : activeDays}
             </p>
-            <p className="text-gray-400 dark:text-slate-500 text-xs">de {unifiedDays.length} días en rango</p>
+            <p className="text-muted-foreground text-xs">de {unifiedDays.length} días en rango</p>
           </div>
 
           {/* top category */}
-          <div className="bg-white dark:bg-app-card rounded-2xl shadow-sm border border-gray-100 dark:border-app-border p-5 flex flex-col gap-1">
-            <p className="text-gray-500 dark:text-app-muted text-sm font-medium">Categoría líder</p>
+          <div className="bg-card rounded-2xl shadow-sm border border-border p-5 flex flex-col gap-1">
+            <p className="text-muted-foreground text-sm font-medium">Categoría líder</p>
             {loading || !topCatKey ? (
-              <p className="text-2xl font-bold text-gray-900 dark:text-app-text">—</p>
+              <p className="text-2xl font-bold text-foreground">—</p>
             ) : (
               <>
                 <p className="text-2xl font-bold" style={{ color: activeMeta[topCatKey].color }}>
                   {activeMeta[topCatKey].label}
                 </p>
-                <p className="text-gray-400 dark:text-slate-500 text-xs">{fmtCurrency(totalByCategory[topCatKey] ?? 0)}</p>
+                <p className="text-muted-foreground text-xs">{fmtCurrency(totalByCategory[topCatKey] ?? 0)}</p>
               </>
             )}
           </div>
@@ -694,10 +712,10 @@ export default function Dashboard() {
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
 
           {/* line chart */}
-          <div className="bg-white dark:bg-app-card rounded-2xl shadow-sm border border-gray-100 dark:border-app-border p-6">
-            <h2 className="text-base font-semibold text-gray-700 dark:text-app-text mb-4">Ingresos por día</h2>
+          <div className="bg-card rounded-2xl shadow-sm border border-border p-6">
+            <h2 className="text-base font-semibold text-foreground mb-4">Ingresos por día</h2>
             {loading ? (
-              <div className="h-64 flex items-center justify-center text-gray-300 dark:text-slate-600 text-sm">Cargando…</div>
+              <div className="h-64 flex items-center justify-center text-muted-foreground text-sm">Cargando…</div>
             ) : (
               <ResponsiveContainer width="100%" height={280}>
                 <LineChart data={chartData} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
@@ -730,10 +748,10 @@ export default function Dashboard() {
           </div>
 
           {/* bar chart */}
-          <div className="bg-white dark:bg-app-card rounded-2xl shadow-sm border border-gray-100 dark:border-app-border p-6">
-            <h2 className="text-base font-semibold text-gray-700 dark:text-app-text mb-4">Mix de ingresos por día</h2>
+          <div className="bg-card rounded-2xl shadow-sm border border-border p-6">
+            <h2 className="text-base font-semibold text-foreground mb-4">Mix de ingresos por día</h2>
             {loading ? (
-              <div className="h-64 flex items-center justify-center text-gray-300 dark:text-slate-600 text-sm">Cargando…</div>
+              <div className="h-64 flex items-center justify-center text-muted-foreground text-sm">Cargando…</div>
             ) : (
               <ResponsiveContainer width="100%" height={280}>
                 <BarChart data={chartData} margin={{ top: 5, right: 10, left: 10, bottom: 5 }}>
@@ -765,31 +783,31 @@ export default function Dashboard() {
         </div>
 
         {/* ── daily table ── */}
-        <div className="bg-white dark:bg-app-card rounded-2xl shadow-sm border border-gray-100 dark:border-app-border overflow-hidden">
-          <div className="px-6 py-4 border-b border-gray-100 dark:border-app-border">
-            <h2 className="text-base font-semibold text-gray-700 dark:text-app-text">Detalle por día</h2>
+        <div className="bg-card rounded-2xl shadow-sm border border-border overflow-hidden">
+          <div className="px-6 py-4 border-b border-border">
+            <h2 className="text-base font-semibold text-foreground">Detalle por día</h2>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="text-xs text-gray-400 dark:text-app-muted uppercase tracking-wide bg-gray-50 dark:bg-slate-700/50">
+                <tr className="text-xs text-muted-foreground uppercase tracking-wide bg-muted/50">
                   <th className="px-6 py-3 text-left font-medium">Fecha</th>
                   {Object.keys(activeMeta).map((k) => (
                     <th key={k} className="px-6 py-3 text-right font-medium" style={{ color: activeMeta[k].color }}>
                       {activeMeta[k].label}
                     </th>
                   ))}
-                  <th className="px-6 py-3 text-right font-medium text-gray-600 dark:text-slate-300">Ingresos</th>
+                  <th className="px-6 py-3 text-right font-medium text-foreground">Ingresos</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100 dark:divide-app-border">
+              <tbody className="divide-y divide-border">
                 {loading ? (
                   <tr>
-                    <td colSpan={catColCount} className="px-6 py-8 text-center text-gray-300 dark:text-slate-600">Cargando…</td>
+                    <td colSpan={catColCount} className="px-6 py-8 text-center text-muted-foreground">Cargando…</td>
                   </tr>
                 ) : unifiedDays.filter((d) => d.totalIncome > 0 || d.totalExpenses > 0).length === 0 ? (
                   <tr>
-                    <td colSpan={catColCount} className="px-6 py-8 text-center text-gray-300 dark:text-slate-600">
+                    <td colSpan={catColCount} className="px-6 py-8 text-center text-muted-foreground">
                       Sin datos en el rango seleccionado
                     </td>
                   </tr>
@@ -799,16 +817,16 @@ export default function Dashboard() {
                     .slice()
                     .sort((a, b) => b.date.localeCompare(a.date))
                     .map((d) => (
-                      <tr key={d.date} className="hover:bg-gray-50 dark:hover:bg-slate-700/30 transition-colors">
-                        <td className="px-6 py-3 font-medium text-gray-700 dark:text-app-text">{fmtDate(d.date)}</td>
+                      <tr key={d.date} className="hover:bg-muted/50 transition-colors">
+                        <td className="px-6 py-3 font-medium text-foreground">{fmtDate(d.date)}</td>
                         {Object.keys(activeMeta).map((k) => (
-                          <td key={k} className="px-6 py-3 text-right text-gray-600 dark:text-slate-300">
+                          <td key={k} className="px-6 py-3 text-right text-muted-foreground">
                             {(d.categories[k] ?? 0) > 0
                               ? fmtCurrency(d.categories[k])
-                              : <span className="text-gray-200 dark:text-slate-700">—</span>}
+                              : <span className="text-muted-foreground/30">—</span>}
                           </td>
                         ))}
-                        <td className="px-6 py-3 text-right font-semibold text-gray-900 dark:text-app-text">
+                        <td className="px-6 py-3 text-right font-semibold text-foreground">
                           {fmtCurrency(d.totalIncome)}
                         </td>
                       </tr>

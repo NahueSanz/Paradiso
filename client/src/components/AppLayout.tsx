@@ -71,13 +71,13 @@ export default function AppLayout({ children, onRenameClub, onShowProfile }: App
   const visibleItems = NAV_ITEMS.filter((item) => !item.ownerOnly || isOwner);
 
   return (
-    <div className="flex h-screen bg-slate-50 dark:bg-slate-900">
+    <div className="flex h-screen bg-background">
 
       {/* ── Desktop Sidebar ── */}
-      <aside className="hidden md:flex flex-col w-64 shrink-0 bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 z-40">
+      <aside className="hidden md:flex flex-col w-64 shrink-0 bg-sidebar border-r border-sidebar-border z-40">
 
         {/* Club name */}
-        <div className="px-4 py-4 border-b border-slate-200 dark:border-slate-700">
+        <div className="px-4 py-4 border-b border-sidebar-border">
           <button
             onClick={() => navigate('/')}
             className="text-lg font-bold text-indigo-700 dark:text-indigo-400 tracking-tight truncate block hover:opacity-80 transition-opacity text-left w-full"
@@ -114,7 +114,7 @@ export default function AppLayout({ children, onRenameClub, onShowProfile }: App
         </nav>
 
         {/* Bottom controls */}
-        <div className="px-3 pb-4 border-t border-slate-200 dark:border-slate-700 pt-3 flex flex-col gap-1">
+        <div className="px-3 pb-4 border-t border-sidebar-border pt-3 flex flex-col gap-1">
 
           {/* Dark mode toggle */}
           <button
@@ -167,7 +167,7 @@ export default function AppLayout({ children, onRenameClub, onShowProfile }: App
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
 
         {/* ── Mobile header ── */}
-        <header className="md:hidden flex items-center justify-between px-4 h-14 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 shrink-0">
+        <header className="md:hidden flex items-center justify-between px-4 h-14 bg-sidebar border-b border-sidebar-border shrink-0">
           <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
             <SheetTrigger asChild>
               <Button variant="ghost" size="icon">
@@ -176,7 +176,7 @@ export default function AppLayout({ children, onRenameClub, onShowProfile }: App
               </Button>
             </SheetTrigger>
 
-            <SheetContent side="left" className="dark:bg-slate-800 dark:border-slate-700">
+            <SheetContent side="left" className="bg-sidebar border-sidebar-border">
               <SheetHeader>
                 <SheetTitle className="truncate pr-8 dark:text-slate-100">{clubName}</SheetTitle>
                 {isOwner && selectedClub && onRenameClub && (
@@ -198,7 +198,7 @@ export default function AppLayout({ children, onRenameClub, onShowProfile }: App
                   </div>
                 )}
 
-                <hr className="border-slate-200 dark:border-slate-700" />
+                <hr className="border-sidebar-border" />
 
                 <nav className="flex flex-col gap-1">
                   <SheetClose asChild>
@@ -219,7 +219,7 @@ export default function AppLayout({ children, onRenameClub, onShowProfile }: App
                   </SheetClose>
                 </nav>
 
-                <hr className="border-slate-200 dark:border-slate-700" />
+                <hr className="border-sidebar-border" />
 
                 <div className="flex items-center justify-between px-1">
                   <span className="text-sm text-slate-500 dark:text-slate-400">Modo oscuro</span>

@@ -1,159 +1,90 @@
-You are working on a full-stack TypeScript app (React + Node + Prisma).
+You are working on a React + Vite + TypeScript project.
 
-We need to fully implement **client phone number support for reservations** (both regular and fixed reservations).
+We already have two SVG assets:
+- /public/logo-full.svg
+- /public/logo-icon.svg
 
-This must be consistent across:
+And a background image:
+- public/paddle-linea-blanca.png
 
-* Database (Prisma)
-* Backend services/controllers
-* Frontend forms (ReservationModal and FixedReservationModal)
-* UI display
+Your task is to integrate them properly into the app.
 
----
+-------------------------------------
+1) FAVICON (Browser Tab Icon)
+-------------------------------------
 
-## 1. DATABASE (Prisma)
+Replace the default Vite favicon with the custom icon.
 
-Update both models:
+Steps:
+- Use /logo-icon.svg as the favicon
+- Update index.html
 
-model Reservation {
-...
-clientPhone String?  // optional but recommended
-}
+Implementation details:
+- Locate index.html in the root
+- Replace the existing <link rel="icon"> with:
 
-model FixedReservation {
-...
-clientPhone String?
-}
+<link rel="icon" type="image/svg+xml" href="/logo-icon.svg" />
 
-* Run migration
-* Ensure existing data is not broken
+Make sure it works in the browser tab.
 
----
+-------------------------------------
+2) LOGIN PAGE LOGO
+-------------------------------------
 
-## 2. BACKEND
+Improve the login/register screen by adding branding.
 
-### Controllers:
-
-* Accept `clientPhone` in:
-
-  * createReservation
-  * updateReservation
-  * createFixedReservation
-  * updateFixedReservation
-
-Validate:
-
-* Optional field
-* If present → must be a valid phone format (basic validation is fine)
+Requirements:
+- Add /logo-full.svg at the top of the login form
+- Center it horizontally
+- Give it proper spacing (margin-bottom)
+- Keep the existing layout (do NOT break current styling)
 
 Example:
+- Logo above the title or form
+- Size: around height 40–60px
 
-* Allow digits, spaces, +, -
-* Reject empty string → store as null
+-------------------------------------
+3) BACKGROUND IMAGE (PADEL COURT)
+-------------------------------------
 
----
+Enhance the login page visually.
 
-### Services:
+Requirements:
+- Use /paddle-linea-blanca.png
+- The image should be subtle (not distracting)
 
-* Persist `clientPhone` correctly
-* Include it in all returned objects
+Implementation options:
+- Use a div with background-image OR Tailwind classes
 
----
+Style requirements:
+- Cover the entire screen (background-size: cover)
+- Centered (background-position: center)
+- Add a dark overlay for readability (important)
 
-## 3. FRONTEND — FORMS
+Example approach:
+- Wrapper div with:
+  - background image
+  - semi-transparent dark overlay (e.g. bg-black/60)
 
-### ReservationModal.tsx
+-------------------------------------
+4) UX QUALITY RULES
+-------------------------------------
 
-### FixedReservationModal.tsx
+- Do NOT break responsiveness
+- Do NOT make text hard to read
+- Keep contrast high
+- Maintain a clean SaaS look (not flashy)
 
-Add a new input:
+-------------------------------------
+5) BONUS (optional but recommended)
+-------------------------------------
 
-Label:
-"Teléfono (opcional)"
+- Add a slight blur or overlay to improve contrast
+- Ensure the logo looks good in both light/dark mode
 
-Input:
+-------------------------------------
 
-* type="tel"
-* placeholder="11 1234-5678"
-
-State:
-const [clientPhone, setClientPhone] = useState('')
-
-Validation:
-
-* Optional
-* If filled → basic format check
-
----
-
-### IMPORTANT:
-
-Include it in payloads:
-
-createReservation({
-...
-clientPhone: clientPhone.trim() || undefined
-})
-
-Same for:
-
-* updateReservation
-* createFixedReservation
-* updateFixedReservation
-
----
-
-## 4. UI DISPLAY
-
-In schedule grid / reservation cards:
-
-Show phone under client name:
-
-Juan Pérez
-📞 11 1234-5678
-
-* Only render if exists
-* Use subtle styling (text-xs, muted color)
-
----
-
-## 5. EDIT MODE
-
-When editing a reservation:
-
-* Pre-fill phone number correctly
-
----
-
-## 6. OPTIONAL UX IMPROVEMENT (VERY NICE)
-
-Make phone clickable:
-
-<a href={`https://wa.me/54${phoneSanitized}`}>
-📞 {clientPhone} </a>
-
-* Strip spaces/dashes
-* Assume Argentina (+54)
-
----
-
-## 7. EDGE CASES
-
-* Empty string → store null
-* Editing → allow clearing the phone
-* Do NOT break existing reservations
-
----
-
-## 8. FINAL CHECK
-
-Verify:
-
-* Create reservation with phone ✅
-* Edit reservation updates phone ✅
-* Fixed reservations support phone ✅
-* Phone shows in UI ✅
-
----
-
-Keep styling consistent with the existing dark mode system.
+Output:
+- Show the updated index.html
+- Show the updated Login/Register component
+- Do not change unrelated code

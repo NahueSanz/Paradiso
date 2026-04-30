@@ -69,42 +69,52 @@ export async function getRevenue(from: string, to: string, clubId: number, owner
   const fromDate = new Date(`${from}T00:00:00.000Z`);
   const toDate   = new Date(`${to}T23:59:59.999Z`);
 
-  const reservations = await prisma.reservation.findMany({
+  const cashMovements = await prisma.cashMovement.findMany({
     where: {
-      date:          { gte: fromDate, lte: toDate },
-      status:        { not: 'cancelled' },
-      paymentStatus: { in: ['paid', 'partial'] },
-      court:         { clubId },
+      clubId,
+      createdAt: { gte: fromDate, lte: toDate },
+      type: 'income',
+      OR: [
+        { fixedReservationInstanceId: { not: null } },
+        { relatedReservationId: { not: null } },
+      ],
     },
-    select: {
-      date:          true,
-      type:          true,
-      totalPrice:    true,
-      depositAmount: true,
-      paymentStatus: true,
+    include: {
+      instance: { select: { type: true } },
     },
   });
 
-  // Group by date string (YYYY-MM-DD)
+  // Bulk-fetch reservation types for normal reservation payments
+  const reservationIds = cashMovements
+    .filter((m) => m.relatedReservationId != null)
+    .map((m) => m.relatedReservationId!);
+
+  const reservationTypeMap = new Map<number, ReservationType>();
+  if (reservationIds.length > 0) {
+    const reservations = await prisma.reservation.findMany({
+      where: { id: { in: reservationIds } },
+      select: { id: true, type: true },
+    });
+    for (const r of reservations) reservationTypeMap.set(r.id, r.type);
+  }
+
   const byDate = new Map<string, Record<ReservationType, number>>();
 
-  for (const r of reservations) {
-    const dateKey = r.date.toISOString().slice(0, 10);
+  for (const m of cashMovements) {
+    // Revenue is grouped by payment date (cash basis), not booking date.
+    const dateKey = m.createdAt.toISOString().slice(0, 10);
+    if (!byDate.has(dateKey)) byDate.set(dateKey, zeroDayTotals());
+    const totals = byDate.get(dateKey)!;
 
-    if (!byDate.has(dateKey)) {
-      byDate.set(dateKey, zeroDayTotals());
+    let type: ReservationType = ReservationType.booking;
+    if (m.fixedReservationInstanceId != null && m.instance?.type) {
+      const t = m.instance.type as ReservationType;
+      if (TYPES.includes(t)) type = t;
+    } else if (m.relatedReservationId != null) {
+      type = reservationTypeMap.get(m.relatedReservationId) ?? ReservationType.booking;
     }
 
-    const totals = byDate.get(dateKey)!;
-    const type   = r.type as ReservationType;
-
-    // Count totalPrice for paid, depositAmount for partial
-    const amount =
-      r.paymentStatus === 'paid'
-        ? Number(r.totalPrice ?? 0)
-        : Number(r.depositAmount ?? 0);
-
-    totals[type] = (totals[type] ?? 0) + amount;
+    totals[type] = (totals[type] ?? 0) + Number(m.amount);
   }
 
   // Fill in every date in the range so the chart has no gaps
@@ -116,9 +126,7 @@ export async function getRevenue(from: string, to: string, clubId: number, owner
     const dateKey = cursor.toISOString().slice(0, 10);
     const totals  = byDate.get(dateKey) ?? zeroDayTotals();
     const total   = TYPES.reduce((sum, t) => sum + (totals[t] ?? 0), 0);
-
     days.push({ date: dateKey, totals, total });
-
     cursor.setUTCDate(cursor.getUTCDate() + 1);
   }
 

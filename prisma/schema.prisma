@@ -7,23 +7,13 @@ datasource db {
   url      = env("DIRECT_URL")
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// ENUMS
+// ─────────────────────────────────────────────────────────────────────────────
+
 enum Role {
   owner
   employee
-}
-
-model User {
-  id          Int          @id @default(autoincrement())
-  email       String       @unique
-  password    String
-  name        String
-  role        Role         @default(employee)
-  clubs       Club[]
-  clubId      Int?
-  club        Club?        @relation("EmployeeClub", fields: [clubId], references: [id])
-  memberships Membership[]
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
 }
 
 enum ReservationStatus {
@@ -51,31 +41,86 @@ enum PlayStatus {
   finished
 }
 
+enum PaymentMethod {
+  cash
+  transfer
+  card
+  mercadopago
+}
+
+enum InstanceStatus {
+  scheduled
+  completed
+  cancelled
+  missed
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// USERS & AUTH
+// ─────────────────────────────────────────────────────────────────────────────
+
+model User {
+  id                       Int          @id @default(autoincrement())
+  email                    String       @unique
+  password                 String
+  name                     String
+  role                     Role         @default(employee)
+  clubs                    Club[]
+  clubId                   Int?
+  club                     Club?        @relation("EmployeeClub", fields: [clubId], references: [id])
+  memberships              Membership[]
+  resetPasswordToken       String?
+  resetPasswordExpires     DateTime?
+  isEmailVerified          Boolean      @default(false)
+  emailVerificationToken   String?
+  emailVerificationExpires DateTime?
+  createdAt                DateTime     @default(now())
+  updatedAt                DateTime     @updatedAt
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CLUB & STRUCTURE
+// ─────────────────────────────────────────────────────────────────────────────
+
 model Club {
-  id             Int             @id @default(autoincrement())
-  name           String
-  ownerId        Int
-  owner          User            @relation(fields: [ownerId], references: [id])
-  employees      User[]          @relation("EmployeeClub")
-  courts         Court[]
-  invitations    Invitation[]
-  memberships    Membership[]
-  cashMovements  CashMovement[]
-  products       Product[]
-  movements      Movement[]
-  openingHours   OpeningHours[]
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
+  id                        Int                        @id @default(autoincrement())
+  name                      String
+  ownerId                   Int
+  owner                     User                       @relation(fields: [ownerId], references: [id])
+  employees                 User[]                     @relation("EmployeeClub")
+  courts                    Court[]
+  invitations               Invitation[]
+  memberships               Membership[]
+  cashMovements             CashMovement[]
+  products                  Product[]
+  movements                 Movement[]
+  openingHours              OpeningHours[]
+  fixedReservations         FixedReservation[]         @relation("ClubFixedReservations")
+  fixedReservationInstances FixedReservationInstance[] @relation("ClubFixedReservationInstances")
+  createdAt                 DateTime                   @default(now())
+  updatedAt                 DateTime                   @updatedAt
+}
+
+model Court {
+  id                        Int                        @id @default(autoincrement())
+  name                      String
+  clubId                    Int
+  club                      Club                       @relation(fields: [clubId], references: [id])
+  reservations              Reservation[]
+  fixedReservations         FixedReservation[]
+  fixedReservationInstances FixedReservationInstance[] @relation("CourtFixedReservationInstances")
+  createdAt                 DateTime                   @default(now())
+  updatedAt                 DateTime                   @updatedAt
 }
 
 model OpeningHours {
   id        Int      @id @default(autoincrement())
   clubId    Int
   club      Club     @relation(fields: [clubId], references: [id])
-  dayOfWeek Int?     // 0-6; null for date-specific overrides
-  date      String?  // "YYYY-MM-DD"; null for day-of-week defaults
-  openTime  String   // "HH:mm"
-  closeTime String   // "HH:mm"
+  dayOfWeek Int?
+  date      String?
+  openTime  String
+  closeTime String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -98,7 +143,6 @@ model Membership {
   clubId      Int
   role        Role
   displayName String
-
   user        User   @relation(fields: [userId], references: [id])
   club        Club   @relation(fields: [clubId], references: [id])
 
@@ -108,90 +152,9 @@ model Membership {
   @@unique([userId, clubId])
 }
 
-model Court {
-  id                Int                @id @default(autoincrement())
-  name              String
-  clubId            Int
-  club              Club               @relation(fields: [clubId], references: [id])
-  reservations      Reservation[]
-  fixedReservations FixedReservation[]
-  createdAt         DateTime           @default(now())
-  updatedAt         DateTime           @updatedAt
-}
-
-model FixedReservation {
-  id            Int      @id @default(autoincrement())
-  courtId       Int
-  court         Court    @relation(fields: [courtId], references: [id])
-  dayOfWeek     Int      // 0-6 (Sunday-Saturday)
-  timeStart     String   // "HH:MM"
-  duration      Int      // minutes
-  clientName    String
-  clientPhone   String?
-  type          String
-  totalPrice    Decimal? @db.Decimal(10, 2)
-  depositAmount Decimal? @db.Decimal(10, 2)
-  carryOver     Decimal   @default(0) @db.Decimal(10, 2)
-  lastPaidAt    DateTime?
-  active        Boolean   @default(true)
-
-  createdAt     DateTime  @default(now())
-}
-
-model Product {
-  id              Int              @id @default(autoincrement())
-  name            String
-  salePrice       Decimal          @db.Decimal(10, 2)
-  purchasePrice   Decimal          @default(0) @db.Decimal(10, 2)
-  stock           Int              @default(0)
-  clubId          Int
-  club            Club             @relation(fields: [clubId], references: [id])
-  cashMovements   CashMovement[]
-  stockMovements  StockMovement[]
-  movements       Movement[]
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
-}
-
-model StockMovement {
-  id        Int      @id @default(autoincrement())
-  productId Int
-  quantity  Int      // negative = sale, positive = restock
-  type      String   // "sale" | "restock"
-  createdAt DateTime @default(now())
-
-  product   Product  @relation(fields: [productId], references: [id])
-}
-
-model CashMovement {
-  id                   Int      @id @default(autoincrement())
-  clubId               Int
-  club                 Club     @relation(fields: [clubId], references: [id])
-  type                 String   // "income" | "expense"
-  concept              String
-  amount               Decimal  @db.Decimal(10, 2)
-  paymentMethod        String
-  relatedReservationId Int?
-  fixedReservationId   Int?
-  relatedProductId     Int?
-  product              Product? @relation(fields: [relatedProductId], references: [id])
-  createdAt            DateTime @default(now())
-}
-
-model Movement {
-  id            Int      @id @default(autoincrement())
-  clubId        Int
-  club          Club     @relation(fields: [clubId], references: [id])
-  type          String   // "sale" | "manual"
-  amount        Decimal  @db.Decimal(10, 2)
-  description   String
-  productId     Int?
-  product       Product? @relation(fields: [productId], references: [id])
-  quantity      Int?
-  status        String   @default("active") // "active" | "cancelled"
-  paymentMethod String   @default("cash")   // "cash" | "mercadopago"
-  createdAt     DateTime @default(now())
-}
+// ─────────────────────────────────────────────────────────────────────────────
+// RESERVATIONS
+// ─────────────────────────────────────────────────────────────────────────────
 
 model Reservation {
   id                    Int               @id @default(autoincrement())
@@ -216,4 +179,127 @@ model Reservation {
   updatedByMembership   Membership?       @relation("UpdatedBy", fields: [updatedByMembershipId], references: [id])
   createdAt             DateTime          @default(now())
   updatedAt             DateTime          @updatedAt
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FIXED RESERVATIONS
+// ─────────────────────────────────────────────────────────────────────────────
+
+model FixedReservation {
+  id            Int                        @id @default(autoincrement())
+  clubId        Int
+  club          Club                       @relation("ClubFixedReservations", fields: [clubId], references: [id])
+  courtId       Int
+  court         Court                      @relation(fields: [courtId], references: [id])
+  startDate     DateTime                   @db.Date
+  endDate       DateTime?                  @db.Date
+  dayOfWeek     Int
+  timeStart     String
+  duration      Int
+  clientName    String
+  clientPhone   String?
+  type          String
+  totalPrice    Decimal?                   @db.Decimal(10, 2)
+  depositAmount Decimal?                   @db.Decimal(10, 2)
+  active        Boolean                    @default(true)
+  instances     FixedReservationInstance[]
+  createdAt     DateTime                   @default(now())
+}
+
+model FixedReservationInstance {
+  id                 Int              @id @default(autoincrement())
+  fixedReservationId Int
+  fixedReservation   FixedReservation @relation(fields: [fixedReservationId], references: [id])
+  clubId             Int
+  club               Club             @relation("ClubFixedReservationInstances", fields: [clubId], references: [id])
+  courtId            Int
+  court              Court            @relation("CourtFixedReservationInstances", fields: [courtId], references: [id])
+  date               DateTime         @db.Date
+  sequenceNumber     Int
+  timeStart          String
+  duration           Int
+  clientName         String
+  clientPhone        String?
+  type               String
+  totalPrice         Decimal?         @db.Decimal(10, 2)
+  depositAmount      Decimal?         @db.Decimal(10, 2)
+  carryOverDeposit   Decimal          @default(0) @db.Decimal(10, 2)
+  paidAmount         Decimal          @default(0) @db.Decimal(10, 2)
+  paymentStatus      PaymentStatus    @default(pending)
+  paidAt             DateTime?
+  paymentMethod      PaymentMethod?
+  status             InstanceStatus   @default(scheduled)
+  notes              String?
+  cashMovements      CashMovement[]
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+
+  @@unique([fixedReservationId, date, timeStart])
+  @@index([clubId, date, status])
+  @@index([courtId, date, status])
+  @@index([fixedReservationId, sequenceNumber])
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// CASH & MOVEMENTS
+// ─────────────────────────────────────────────────────────────────────────────
+
+model CashMovement {
+  id                         Int                       @id @default(autoincrement())
+  clubId                     Int
+  club                       Club                      @relation(fields: [clubId], references: [id])
+  type                       String
+  concept                    String
+  amount                     Decimal                   @db.Decimal(10, 2)
+  paymentMethod              String
+  // TODO: add relation to Reservation with onDelete: SetNull in future migration
+  relatedReservationId       Int?
+  fixedReservationInstanceId Int?
+  instance                   FixedReservationInstance? @relation(fields: [fixedReservationInstanceId], references: [id])
+  relatedProductId           Int?
+  product                    Product?                  @relation(fields: [relatedProductId], references: [id])
+  createdAt                  DateTime                  @default(now())
+}
+
+model Movement {
+  id            Int      @id @default(autoincrement())
+  clubId        Int
+  club          Club     @relation(fields: [clubId], references: [id])
+  type          String
+  amount        Decimal  @db.Decimal(10, 2)
+  description   String
+  productId     Int?
+  product       Product? @relation(fields: [productId], references: [id])
+  quantity      Int?
+  status        String   @default("active")
+  paymentMethod String   @default("cash")
+  createdAt     DateTime @default(now())
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PRODUCTS & STOCK
+// ─────────────────────────────────────────────────────────────────────────────
+
+model Product {
+  id             Int             @id @default(autoincrement())
+  name           String
+  salePrice      Decimal         @db.Decimal(10, 2)
+  purchasePrice  Decimal         @default(0) @db.Decimal(10, 2)
+  stock          Int             @default(0)
+  clubId         Int
+  club           Club            @relation(fields: [clubId], references: [id])
+  cashMovements  CashMovement[]
+  stockMovements StockMovement[]
+  movements      Movement[]
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+}
+
+model StockMovement {
+  id        Int      @id @default(autoincrement())
+  productId Int
+  quantity  Int
+  type      String
+  createdAt DateTime @default(now())
+  product   Product  @relation(fields: [productId], references: [id])
 }

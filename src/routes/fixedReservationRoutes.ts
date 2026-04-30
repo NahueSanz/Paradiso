@@ -1,9 +1,10 @@
 import { Router } from 'express';
 import {
+  cancelInstance,
   createFixedReservation,
   deleteFixedReservation,
   getFixedReservations,
-  payFixedReservation,
+  payInstance,
   toggleFixedReservation,
   updateFixedReservation,
 } from '../controllers/fixedReservationController';
@@ -14,11 +15,15 @@ const router = Router();
 
 router.use(resolveMembership);
 
-router.get('/',              asyncHandler(getFixedReservations));
-router.post('/',             asyncHandler(createFixedReservation));
-router.put('/:id',           asyncHandler(updateFixedReservation));
-router.delete('/:id',        asyncHandler(deleteFixedReservation));
-router.patch('/:id/pay',     asyncHandler(payFixedReservation));
-router.patch('/:id/toggle',  asyncHandler(toggleFixedReservation));
+// Instance-level routes — defined before /:id to avoid segment collision
+router.post('/instances/:instanceId/pay',    asyncHandler(payInstance));
+router.patch('/instances/:instanceId/cancel', asyncHandler(cancelInstance));
+
+// Rule-level routes
+router.get('/',             asyncHandler(getFixedReservations));
+router.post('/',            asyncHandler(createFixedReservation));
+router.put('/:id',          asyncHandler(updateFixedReservation));
+router.delete('/:id',       asyncHandler(deleteFixedReservation));
+router.patch('/:id/toggle', asyncHandler(toggleFixedReservation));
 
 export default router;

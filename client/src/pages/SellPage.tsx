@@ -17,12 +17,12 @@ interface ProductRowProps {
 
 function ProductRow({ product, qty, onQtyChange }: ProductRowProps) {
   return (
-    <div className={`flex flex-col sm:flex-row sm:items-center gap-3 px-5 py-4 border-b border-gray-100 dark:border-app-border last:border-0 ${
+    <div className={`flex flex-col sm:flex-row sm:items-center gap-3 px-5 py-4 border-b border-border last:border-0 ${
       product.stock === 0 ? 'opacity-50' : ''
     }`}>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="font-medium text-gray-800 dark:text-app-text text-sm">{product.name}</span>
+          <span className="font-medium text-foreground text-sm">{product.name}</span>
           {product.stock === 0 && (
             <span className="text-xs font-semibold text-red-500 bg-red-50 dark:bg-red-900/20 px-1.5 py-0.5 rounded-full">Sin stock</span>
           )}
@@ -31,8 +31,8 @@ function ProductRow({ product, qty, onQtyChange }: ProductRowProps) {
           )}
         </div>
         <div className="flex items-center gap-3 mt-0.5">
-          <span className="text-xs text-gray-500 dark:text-app-muted">{fmtMoney(product.salePrice)} c/u</span>
-          <span className="text-xs text-gray-400 dark:text-slate-500">Stock: {product.stock}</span>
+          <span className="text-xs text-muted-foreground">{fmtMoney(product.salePrice)} c/u</span>
+          <span className="text-xs text-muted-foreground">Stock: {product.stock}</span>
         </div>
       </div>
 
@@ -46,17 +46,17 @@ function ProductRow({ product, qty, onQtyChange }: ProductRowProps) {
         <button
           onClick={() => onQtyChange(product.id, Math.max(0, qty - 1))}
           disabled={qty <= 0 || product.stock === 0}
-          className="w-7 h-7 flex items-center justify-center rounded-lg border border-gray-200 dark:border-app-border text-gray-600 dark:text-app-muted
-                     hover:bg-gray-100 dark:hover:bg-app-card transition-colors disabled:opacity-40 disabled:cursor-not-allowed text-sm font-bold"
+          className="w-7 h-7 flex items-center justify-center rounded-lg border border-input text-muted-foreground
+                     hover:bg-muted transition-colors disabled:opacity-40 disabled:cursor-not-allowed text-sm font-bold"
         >
           −
         </button>
-        <span className="w-8 text-center text-sm font-semibold text-gray-700 dark:text-app-text">{qty}</span>
+        <span className="w-8 text-center text-sm font-semibold text-foreground">{qty}</span>
         <button
           onClick={() => onQtyChange(product.id, Math.min(product.stock, qty + 1))}
           disabled={qty >= product.stock || product.stock === 0}
-          className="w-7 h-7 flex items-center justify-center rounded-lg border border-gray-200 dark:border-app-border text-gray-600 dark:text-app-muted
-                     hover:bg-gray-100 dark:hover:bg-app-card transition-colors disabled:opacity-40 disabled:cursor-not-allowed text-sm font-bold"
+          className="w-7 h-7 flex items-center justify-center rounded-lg border border-input text-muted-foreground
+                     hover:bg-muted transition-colors disabled:opacity-40 disabled:cursor-not-allowed text-sm font-bold"
         >
           +
         </button>
@@ -140,13 +140,13 @@ export default function SellPage() {
       <div className="flex-1 overflow-y-auto">
         <div className="p-6 max-w-5xl mx-auto space-y-6">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-app-text">Vender productos</h1>
-            <p className="text-sm text-gray-500 dark:text-app-muted mt-0.5">Seleccioná la cantidad de cada producto y presioná Vender</p>
+            <h1 className="text-2xl font-bold text-foreground">Vender productos</h1>
+            <p className="text-sm text-muted-foreground mt-0.5">Seleccioná la cantidad de cada producto y presioná Vender</p>
           </div>
 
           {!selectedClubId && (
             <div className="flex flex-col items-center justify-center py-24 text-center gap-3">
-              <p className="text-lg font-semibold text-gray-700 dark:text-app-text">Seleccioná un club</p>
+              <p className="text-lg font-semibold text-foreground">Seleccioná un club</p>
             </div>
           )}
 
@@ -161,11 +161,11 @@ export default function SellPage() {
           )}
 
           {selectedClubId && (
-            <div className="bg-white dark:bg-app-card rounded-2xl shadow-sm border border-gray-100 dark:border-app-border overflow-hidden">
+            <div className="bg-card rounded-2xl shadow-sm border border-border overflow-hidden">
               {loading ? (
-                <div className="px-6 py-8 text-center text-gray-300 dark:text-slate-600 text-sm">Cargando…</div>
+                <div className="px-6 py-8 text-center text-muted-foreground text-sm">Cargando…</div>
               ) : products.length === 0 ? (
-                <div className="px-6 py-8 text-center text-gray-300 dark:text-slate-600 text-sm">
+                <div className="px-6 py-8 text-center text-muted-foreground text-sm">
                   No hay productos. Agregá productos desde Stock.
                 </div>
               ) : (
@@ -185,18 +185,18 @@ export default function SellPage() {
 
       {/* Checkout bar — pinned at bottom via flex, no fixed positioning */}
       {selectedClubId && (
-        <div className="shrink-0 bg-white dark:bg-app-surface border-t border-gray-200 dark:border-app-border shadow-lg px-6 py-4">
+        <div className="shrink-0 bg-card border-t border-border shadow-lg px-6 py-4">
           <div className="max-w-5xl mx-auto flex flex-col sm:flex-row items-center gap-4">
             <div className="flex-1 text-center sm:text-left">
-              <span className="text-xs text-gray-500 dark:text-app-muted uppercase tracking-wide">Total</span>
-              <p className="text-2xl font-bold text-gray-900 dark:text-app-text">{fmtMoney(total)}</p>
+              <span className="text-xs text-muted-foreground uppercase tracking-wide">Total</span>
+              <p className="text-2xl font-bold text-foreground">{fmtMoney(total)}</p>
             </div>
             <div className="flex items-center gap-3">
-              <label className="text-sm font-medium text-gray-600 dark:text-app-muted">Medio de pago:</label>
+              <label className="text-sm font-medium text-muted-foreground">Medio de pago:</label>
               <select
                 value={paymentMethod}
                 onChange={(e) => setPayment(e.target.value as 'cash' | 'mercadopago')}
-                className="border border-gray-200 dark:border-app-border dark:bg-app-card dark:text-app-text rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
+                className="border border-input bg-background text-foreground rounded-lg px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
               >
                 <option value="cash">Efectivo</option>
                 <option value="mercadopago">Mercado Pago</option>

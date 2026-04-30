@@ -217,11 +217,14 @@ export async function payReservation(
       return;
     }
 
+    const paymentMethod = typeof req.body.paymentMethod === 'string' ? req.body.paymentMethod : 'cash';
+
     const reservation = await reservationService.payReservation(
       id,
       amount,
       req.user.id,
       req.membership?.id,
+      paymentMethod,
     );
     res.json(reservation);
   } catch (err) {

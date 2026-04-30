@@ -56,11 +56,11 @@ export default function StockPage() {
   const lowStockCount = products.filter((p) => p.stock > 0 && p.stock < 5).length;
 
   return (
-    <div className="bg-gray-50 dark:bg-app-bg">
-      <header className="bg-white dark:bg-app-surface border-b border-gray-200 dark:border-app-border px-6 py-4 flex items-center justify-between gap-4 flex-wrap">
+    <div className="bg-background">
+      <header className="bg-card border-b border-border px-6 py-4 flex items-center justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-xl font-bold text-indigo-700 dark:text-indigo-400 tracking-tight">Stock</h1>
-          <p className="text-xs text-gray-400 dark:text-app-muted">Gestión de productos y stock</p>
+          <p className="text-xs text-muted-foreground">Gestión de productos y stock</p>
         </div>
       </header>
 
@@ -68,7 +68,7 @@ export default function StockPage() {
 
         {!selectedClubId && (
           <div className="flex flex-col items-center justify-center py-24 text-center gap-3">
-            <p className="text-lg font-semibold text-gray-700 dark:text-app-text">Seleccioná un club para ver el stock</p>
+            <p className="text-lg font-semibold text-foreground">Seleccioná un club para ver el stock</p>
           </div>
         )}
 
@@ -81,25 +81,25 @@ export default function StockPage() {
         {selectedClubId && (
           <>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="bg-white dark:bg-app-card rounded-2xl shadow-sm border border-gray-100 dark:border-app-border p-5 flex flex-col gap-1">
-                <p className="text-sm font-medium text-gray-500 dark:text-app-muted">Productos</p>
+              <div className="bg-card rounded-2xl shadow-sm border border-border p-5 flex flex-col gap-1">
+                <p className="text-sm font-medium text-muted-foreground">Productos</p>
                 <p className="text-2xl font-bold text-indigo-700 dark:text-indigo-400">{loading ? '—' : totalItems}</p>
               </div>
-              <div className="bg-white dark:bg-app-card rounded-2xl shadow-sm border border-gray-100 dark:border-app-border p-5 flex flex-col gap-1">
-                <p className="text-sm font-medium text-gray-500 dark:text-app-muted">Valor total del stock</p>
+              <div className="bg-card rounded-2xl shadow-sm border border-border p-5 flex flex-col gap-1">
+                <p className="text-sm font-medium text-muted-foreground">Valor total del stock</p>
                 <p className="text-2xl font-bold text-emerald-600">{loading ? '—' : fmtMoney(totalValue)}</p>
               </div>
-              <div className="bg-white dark:bg-app-card rounded-2xl shadow-sm border border-gray-100 dark:border-app-border p-5 flex flex-col gap-1">
-                <p className="text-sm font-medium text-gray-500 dark:text-app-muted">Stock bajo (&lt;5 unidades)</p>
-                <p className={`text-2xl font-bold ${lowStockCount > 0 ? 'text-amber-500' : 'text-gray-400 dark:text-slate-500'}`}>
+              <div className="bg-card rounded-2xl shadow-sm border border-border p-5 flex flex-col gap-1">
+                <p className="text-sm font-medium text-muted-foreground">Stock bajo (&lt;5 unidades)</p>
+                <p className={`text-2xl font-bold ${lowStockCount > 0 ? 'text-amber-500' : 'text-muted-foreground'}`}>
                   {loading ? '—' : lowStockCount}
                 </p>
               </div>
             </div>
 
-            <div className="bg-white dark:bg-app-card rounded-2xl shadow-sm border border-gray-100 dark:border-app-border overflow-hidden">
-              <div className="px-6 py-4 border-b border-gray-100 dark:border-app-border flex items-center justify-between">
-                <h2 className="text-base font-semibold text-gray-700 dark:text-app-text">Productos</h2>
+            <div className="bg-card rounded-2xl shadow-sm border border-border overflow-hidden">
+              <div className="px-6 py-4 border-b border-border flex items-center justify-between">
+                <h2 className="text-base font-semibold text-foreground">Productos</h2>
                 <button
                   onClick={() => setProductModal({ open: true, product: null })}
                   disabled={!selectedClubId}
@@ -116,7 +116,7 @@ export default function StockPage() {
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="text-xs text-gray-400 dark:text-app-muted uppercase tracking-wide bg-gray-50 dark:bg-slate-700/50">
+                    <tr className="text-xs text-muted-foreground uppercase tracking-wide bg-muted/50">
                       <th className="px-6 py-3 text-left font-medium">Nombre</th>
                       <th className="px-6 py-3 text-right font-medium">Precio venta</th>
                       <th className="px-6 py-3 text-right font-medium">Stock</th>
@@ -124,21 +124,21 @@ export default function StockPage() {
                       <th className="px-6 py-3 text-right font-medium">Acciones</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-100 dark:divide-app-border">
+                  <tbody className="divide-y divide-border">
                     {loading ? (
                       <tr>
-                        <td colSpan={5} className="px-6 py-8 text-center text-gray-300 dark:text-slate-600">Cargando…</td>
+                        <td colSpan={5} className="px-6 py-8 text-center text-muted-foreground">Cargando…</td>
                       </tr>
                     ) : products.length === 0 ? (
                       <tr>
-                        <td colSpan={5} className="px-6 py-8 text-center text-gray-300 dark:text-slate-600">
+                        <td colSpan={5} className="px-6 py-8 text-center text-muted-foreground">
                           No hay productos. Agregá uno para comenzar.
                         </td>
                       </tr>
                     ) : (
                       products.map((p) => (
-                        <tr key={p.id} className={`hover:bg-gray-50 dark:hover:bg-slate-700/30 transition-colors ${highlightProductId === p.id ? 'bg-violet-50 dark:bg-violet-900/20 ring-1 ring-inset ring-violet-200 dark:ring-violet-700' : ''}`}>
-                          <td className="px-6 py-3 text-gray-700 dark:text-app-text">
+                        <tr key={p.id} className={`hover:bg-muted/50 transition-colors ${highlightProductId === p.id ? 'bg-violet-50 dark:bg-violet-900/20 ring-1 ring-inset ring-violet-200 dark:ring-violet-700' : ''}`}>
+                          <td className="px-6 py-3 text-foreground">
                             <span>{p.name}</span>
                             {p.stock === 0 && (
                               <span className="ml-2 text-xs font-semibold text-red-500 bg-red-50 dark:bg-red-900/20 px-1.5 py-0.5 rounded-full">
@@ -151,7 +151,7 @@ export default function StockPage() {
                               </span>
                             )}
                           </td>
-                          <td className="px-6 py-3 text-right text-gray-600 dark:text-slate-300 font-medium">
+                          <td className="px-6 py-3 text-right text-foreground font-medium">
                             {fmtMoney(p.salePrice)}
                           </td>
                           <td className="px-6 py-3 text-right">
@@ -160,12 +160,12 @@ export default function StockPage() {
                                 ? 'text-red-500'
                                 : p.stock < 5
                                   ? 'text-amber-600 dark:text-amber-400'
-                                  : 'text-gray-700 dark:text-app-text'
+                                  : 'text-foreground'
                             }`}>
                               {p.stock}
                             </span>
                           </td>
-                          <td className="px-6 py-3 text-right text-gray-500 dark:text-app-muted">
+                          <td className="px-6 py-3 text-right text-muted-foreground">
                             {fmtMoney(p.purchasePrice)}
                           </td>
                           <td className="px-6 py-3">

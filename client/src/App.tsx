@@ -52,12 +52,12 @@ function CreateCourtModal({ onClose, onCreated }: CreateCourtModalProps) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6">
-        <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-4">Agregar cancha</h2>
+      <div className="bg-card text-card-foreground rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6">
+        <h2 className="text-lg font-bold mb-4">Agregar cancha</h2>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+            <label className="block text-sm font-medium text-foreground mb-1">
               Nombre de la cancha
             </label>
             <input
@@ -66,9 +66,9 @@ function CreateCourtModal({ onClose, onCreated }: CreateCourtModalProps) {
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Ej: Cancha 1"
-              className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm
-                         bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100
-                         focus:outline-none focus:ring-2 focus:ring-indigo-400"
+              className="w-full border border-input rounded-lg px-3 py-2 text-sm
+                         bg-background text-foreground
+                         focus:outline-none focus:ring-2 focus:ring-ring"
             />
             {error && <p className="text-xs text-red-600 dark:text-red-400 mt-1">{error}</p>}
           </div>
@@ -77,8 +77,8 @@ function CreateCourtModal({ onClose, onCreated }: CreateCourtModalProps) {
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 px-4 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300
-                         hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+              className="flex-1 px-4 py-2 text-sm rounded-lg border border-border text-muted-foreground
+                         hover:bg-muted transition-colors"
             >
               Cancelar
             </button>
@@ -130,19 +130,19 @@ function RenameClubModal({ currentName, onClose, onRenamed }: RenameClubModalPro
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6">
-        <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-4">Editar nombre del club</h2>
+      <div className="bg-card text-card-foreground rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6">
+        <h2 className="text-lg font-bold mb-4">Editar nombre del club</h2>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Nombre</label>
+            <label className="block text-sm font-medium text-foreground mb-1">Nombre</label>
             <input
               ref={inputRef}
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm
-                         bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100
-                         focus:outline-none focus:ring-2 focus:ring-indigo-400"
+              className="w-full border border-input rounded-lg px-3 py-2 text-sm
+                         bg-background text-foreground
+                         focus:outline-none focus:ring-2 focus:ring-ring"
             />
             {error && <p className="text-xs text-red-600 dark:text-red-400 mt-1">{error}</p>}
           </div>
@@ -150,8 +150,8 @@ function RenameClubModal({ currentName, onClose, onRenamed }: RenameClubModalPro
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 px-4 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300
-                         hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+              className="flex-1 px-4 py-2 text-sm rounded-lg border border-border text-muted-foreground
+                         hover:bg-muted transition-colors"
             >
               Cancelar
             </button>
@@ -203,22 +203,22 @@ function ProfileModal({ currentDisplayName, onClose, onSave }: ProfileModalProps
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6">
-        <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-4">Mi perfil</h2>
+      <div className="bg-card text-card-foreground rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6">
+        <h2 className="text-lg font-bold mb-4">Mi perfil</h2>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Nombre visible</label>
+            <label className="block text-sm font-medium text-foreground mb-1">Nombre visible</label>
             <input
               ref={inputRef}
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Ej: Juan"
-              className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm
-                         bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100
-                         focus:outline-none focus:ring-2 focus:ring-indigo-400"
+              className="w-full border border-input rounded-lg px-3 py-2 text-sm
+                         bg-background text-foreground
+                         focus:outline-none focus:ring-2 focus:ring-ring"
             />
-            <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">
+            <p className="text-xs text-muted-foreground mt-1">
               Así aparecerá en las reservas que crees.
             </p>
             {error && <p className="text-xs text-red-600 dark:text-red-400 mt-1">{error}</p>}
@@ -227,8 +227,8 @@ function ProfileModal({ currentDisplayName, onClose, onSave }: ProfileModalProps
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 px-4 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300
-                         hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+              className="flex-1 px-4 py-2 text-sm rounded-lg border border-border text-muted-foreground
+                         hover:bg-muted transition-colors"
             >
               Cancelar
             </button>
@@ -300,11 +300,11 @@ function EditDayHoursModal({ clubId, date, current, onClose, onSaved }: EditDayH
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-      <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6">
-        <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-1">
+      <div className="bg-card text-card-foreground rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6">
+        <h2 className="text-lg font-bold mb-1">
           Horario del día
         </h2>
-        <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
+        <p className="text-sm text-muted-foreground mb-4">
           {dayLabel} {date}
           {current.isOverride && (
             <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold
@@ -317,34 +317,34 @@ function EditDayHoursModal({ clubId, date, current, onClose, onSaved }: EditDayH
         <form onSubmit={handleSave} className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
+              <label className="block text-xs font-medium text-muted-foreground mb-1">
                 Apertura
               </label>
               <input
                 type="time"
                 value={openTime}
                 onChange={(e) => setOpenTime(e.target.value)}
-                className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm
-                           bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100
+                className="w-full border border-input rounded-lg px-3 py-2 text-sm
+                           bg-background text-foreground
                            focus:outline-none focus:ring-2 focus:ring-indigo-400"
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
+              <label className="block text-xs font-medium text-muted-foreground mb-1">
                 Cierre
               </label>
               <input
                 type="time"
                 value={closeTime}
                 onChange={(e) => setCloseTime(e.target.value)}
-                className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm
-                           bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100
+                className="w-full border border-input rounded-lg px-3 py-2 text-sm
+                           bg-background text-foreground
                            focus:outline-none focus:ring-2 focus:ring-indigo-400"
               />
             </div>
           </div>
 
-          <p className="text-[11px] text-slate-400 dark:text-slate-500">
+          <p className="text-[11px] text-muted-foreground">
             Si el cierre es menor a la apertura se interpreta como el día siguiente (ej: 09:00 → 01:00).
           </p>
 
@@ -354,8 +354,8 @@ function EditDayHoursModal({ clubId, date, current, onClose, onSaved }: EditDayH
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 px-4 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-600
-                         text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+              className="flex-1 px-4 py-2 text-sm rounded-lg border border-border
+                         text-muted-foreground hover:bg-muted transition-colors"
             >
               Cancelar
             </button>
@@ -524,9 +524,9 @@ export default function App() {
       onShowProfile={() => setShowProfileModal(true)}
     >
       {/* Page header */}
-      <div className="sticky top-0 z-30 bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 px-4 sm:px-6 py-3">
+      <div className="sticky top-0 z-30 bg-card border-b border-border px-4 sm:px-6 py-3">
         <div className="flex items-center justify-between gap-3 flex-wrap mb-2">
-          <h1 className="text-xl font-bold text-slate-800 dark:text-slate-200">Turnos</h1>
+          <h1 className="text-xl font-bold text-foreground">Turnos</h1>
           <div className="flex items-center gap-2 flex-wrap">
             {isOwner && (
               <button
@@ -573,10 +573,9 @@ export default function App() {
             {isOwner && selectedClubId && (
               <button
                 onClick={() => setShowEditHoursModal(true)}
-                className="flex items-center gap-1.5 text-sm font-medium text-slate-600
-                           hover:text-slate-900 px-3 py-1.5 rounded-lg hover:bg-slate-100
-                           dark:hover:bg-slate-700/50 border border-slate-200 dark:border-slate-600
-                           dark:text-slate-400 transition-colors"
+                className="flex items-center gap-1.5 text-sm font-medium text-muted-foreground
+                           hover:text-foreground px-3 py-1.5 rounded-lg hover:bg-muted
+                           border border-border transition-colors"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
@@ -589,7 +588,7 @@ export default function App() {
         </div>
 
         <div className="flex items-center gap-4 flex-wrap">
-          <div className="hidden sm:flex items-center gap-3 text-xs text-slate-600 dark:text-slate-400">
+          <div className="hidden sm:flex items-center gap-3 text-xs text-muted-foreground">
             {legend.map(({ label, className }) => (
               <span key={label} className="flex items-center gap-1">
                 <span className={`inline-block w-3 h-3 rounded-sm ${className}`} />
@@ -605,16 +604,16 @@ export default function App() {
                 Horario modificado
               </span>
             )}
-            <span className="text-xs text-slate-400 dark:text-slate-500">
+            <span className="text-xs text-muted-foreground">
               {openingHours.openTime} – {openingHours.closeTime}
             </span>
             <input
               type="date"
               value={date}
               onChange={(e) => setDate(e.target.value)}
-              className="border dark:border-slate-600 rounded-lg px-3 py-1.5 text-sm
-                         bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100
-                         focus:outline-none focus:ring-2 focus:ring-indigo-400"
+              className="border border-input rounded-lg px-3 py-1.5 text-sm
+                         bg-background text-foreground
+                         focus:outline-none focus:ring-2 focus:ring-ring"
             />
           </div>
         </div>
@@ -657,6 +656,7 @@ export default function App() {
           onPayAmount={handlePayAmount}
           onUpdateNote={handleUpdateNote}
           onDelete={handleDelete}
+          onFixedSuccess={refresh}
         />
       )}
 

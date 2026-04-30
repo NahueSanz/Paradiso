@@ -212,7 +212,7 @@ export interface UpdateReservationInput {
 export async function updateReservation(id: number, input: UpdateReservationInput, userId: number) {
   const existing = await prisma.reservation.findUnique({
     where: { id },
-    include: { court: { select: { club: { select: { ownerId: true, employees: { select: { id: true } } } } } } },
+    include: { court: { select: { clubId: true, club: { select: { ownerId: true, employees: { select: { id: true } } } } } } },
   });
   if (!existing) throw new AppError('Reservation not found', 404);
 
@@ -286,14 +286,33 @@ export async function updateReservation(id: number, input: UpdateReservationInpu
 
   if (input.membershipId !== undefined) data.updatedByMembershipId = input.membershipId;
 
-  const result = await prisma.reservation.update({
-    where: { id },
-    data,
-    include: {
-      court: { select: { id: true, name: true } },
-      createdByMembership: membershipSelect,
-      updatedByMembership: membershipSelect,
-    },
+  const prevPaid = existing.paidAmount != null ? Number(existing.paidAmount) : 0;
+  const nextPaid = resolvedPaidAmount ?? prevPaid;
+  const delta = nextPaid - prevPaid;
+
+  const result = await prisma.$transaction(async (tx) => {
+    if (delta > 0) {
+      await tx.cashMovement.create({
+        data: {
+          clubId:              existing.court.clubId,
+          type:                'income',
+          concept:             `Reserva - ${existing.clientName}`,
+          amount:              delta,
+          paymentMethod:       'cash',
+          relatedReservationId: id,
+        },
+      });
+    }
+
+    return tx.reservation.update({
+      where: { id },
+      data,
+      include: {
+        court: { select: { id: true, name: true } },
+        createdByMembership: membershipSelect,
+        updatedByMembership: membershipSelect,
+      },
+    });
   });
 
   return withRemainingAmount(result);
@@ -304,6 +323,7 @@ export async function payReservation(
   amount: number,
   userId: number,
   membershipId?: number,
+  paymentMethod: string = 'cash',
 ) {
   if (!Number.isFinite(amount) || amount <= 0) {
     throw new AppError('amount must be a positive number', 400);
@@ -311,7 +331,14 @@ export async function payReservation(
 
   const existing = await prisma.reservation.findUnique({
     where: { id },
-    include: { court: { select: { club: { select: { ownerId: true, employees: { select: { id: true } } } } } } },
+    include: {
+      court: {
+        select: {
+          clubId: true,
+          club: { select: { ownerId: true, employees: { select: { id: true } } } },
+        },
+      },
+    },
   });
   if (!existing) throw new AppError('Reservation not found', 404);
 
@@ -323,8 +350,8 @@ export async function payReservation(
     throw new AppError('Cannot modify a cancelled reservation', 400);
   }
 
-  const total      = existing.totalPrice  != null ? Number(existing.totalPrice)  : null;
-  const currentPaid = existing.paidAmount != null ? Number(existing.paidAmount)  : 0;
+  const total       = existing.totalPrice  != null ? Number(existing.totalPrice)  : null;
+  const currentPaid = existing.paidAmount  != null ? Number(existing.paidAmount)  : 0;
   const newPaid     = currentPaid + amount;
 
   if (total !== null && newPaid > total + 0.005) {
@@ -341,21 +368,36 @@ export async function payReservation(
         ? PaymentStatus.partial
         : PaymentStatus.pending;
 
-  const result = await prisma.reservation.update({
-    where: { id },
-    data: {
-      paidAmount:           newPaid,
-      paymentStatus:        newPaymentStatus,
-      updatedByMembershipId: membershipId ?? null,
-    },
-    include: {
-      court: { select: { id: true, name: true } },
-      createdByMembership: membershipSelect,
-      updatedByMembership: membershipSelect,
-    },
+  const updated = await prisma.$transaction(async (tx) => {
+    const result = await tx.reservation.update({
+      where: { id },
+      data: {
+        paidAmount:            newPaid,
+        paymentStatus:         newPaymentStatus,
+        updatedByMembershipId: membershipId ?? null,
+      },
+      include: {
+        court: { select: { id: true, name: true } },
+        createdByMembership: membershipSelect,
+        updatedByMembership: membershipSelect,
+      },
+    });
+
+    await tx.cashMovement.create({
+      data: {
+        clubId:              existing.court.clubId,
+        type:                'income',
+        concept:             `Reserva - ${existing.clientName}`,
+        amount,
+        paymentMethod,
+        relatedReservationId: id,
+      },
+    });
+
+    return result;
   });
 
-  return withRemainingAmount(result);
+  return withRemainingAmount(updated);
 }
 
 export async function updateReservationNote(
@@ -401,5 +443,8 @@ export async function deleteReservation(id: number, userId: number) {
   const isEmployee = existing.court.club.employees.some((e) => e.id === userId);
   if (!isOwner && !isEmployee) throw new AppError('Forbidden', 403);
 
-  await prisma.reservation.delete({ where: { id } });
+  await prisma.$transaction([
+    prisma.cashMovement.deleteMany({ where: { relatedReservationId: id } }),
+    prisma.reservation.delete({ where: { id } }),
+  ]);
 }

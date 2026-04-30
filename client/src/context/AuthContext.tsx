@@ -7,28 +7,31 @@ const USER_KEY  = 'pp_user';
 const BASE      = `${API_URL}/api`;
 
 interface AuthContextValue {
-  user:     User | null;
-  token:    string | null;
-  setUser:  (user: User | null) => void;          // kept for demo role toggle
-  login:    (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string, role: 'owner' | 'employee') => Promise<void>;
-  logout:   () => void;
+  user:                 User | null;
+  token:                string | null;
+  setUser:              (user: User | null) => void;
+  login:                (email: string, password: string) => Promise<void>;
+  register:             (email: string, password: string, role: 'owner' | 'employee') => Promise<void>;
+  logout:               () => void;
+  resendVerification:   (email: string) => Promise<void>;
+  markEmailVerified:    () => void;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-async function authRequest(
-  path: string,
-  body: Record<string, unknown>,
-): Promise<{ token: string; user: User }> {
+async function postJson<T>(path: string, body: Record<string, unknown>, headers?: Record<string, string>): Promise<T> {
   const res = await fetch(`${BASE}${path}`, {
     method:  'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...headers },
     body:    JSON.stringify(body),
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.message ?? `HTTP ${res.status}`);
-  return data;
+  if (!res.ok) {
+    const err = new Error((data as { message?: string }).message ?? `HTTP ${res.status}`);
+    (err as any).code = (data as { code?: string }).code;
+    throw err;
+  }
+  return data as T;
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -43,9 +46,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   async function login(email: string, password: string) {
-    const { token: t, user: u } = await authRequest('/auth/login', { email, password });
-    // Write to localStorage synchronously so api.ts can read it immediately
-    // on the next page before React's state update cycle completes.
+    const { token: t, user: u } = await postJson<{ token: string; user: User }>(
+      '/auth/login',
+      { email, password },
+    );
     localStorage.setItem(TOKEN_KEY, t);
     localStorage.setItem(USER_KEY, JSON.stringify(u));
     setToken(t);
@@ -53,11 +57,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   async function register(email: string, password: string, role: 'owner' | 'employee') {
-    const { token: t, user: u } = await authRequest('/auth/register', { email, password, role });
-    localStorage.setItem(TOKEN_KEY, t);
-    localStorage.setItem(USER_KEY, JSON.stringify(u));
-    setToken(t);
-    setUserState(u);
+    // Backend no longer returns a token — user must verify email before accessing the app.
+    await postJson('/auth/register', { email, password, role });
   }
 
   function logout() {
@@ -67,8 +68,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUserState(null);
   }
 
+  async function resendVerification(email: string) {
+    if (!email?.trim()) return;
+    await postJson('/auth/resend-verification', { email });
+  }
+
+  function markEmailVerified() {
+    if (!user) return;
+    const updated: User = { ...user, isEmailVerified: true };
+    localStorage.setItem(USER_KEY, JSON.stringify(updated));
+    setUserState(updated);
+  }
+
   return (
-    <AuthContext.Provider value={{ user, token, setUser, login, register, logout }}>
+    <AuthContext.Provider
+      value={{ user, token, setUser, login, register, logout, resendVerification, markEmailVerified }}
+    >
       {children}
     </AuthContext.Provider>
   );

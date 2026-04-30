@@ -72,14 +72,14 @@ export default function ProductModal({ product, onClose, onSuccess }: ProductMod
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="bg-white dark:bg-app-surface rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6">
+      <div className="bg-card text-card-foreground rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6">
         <div className="flex items-center justify-between mb-5">
-          <h2 className="text-base font-semibold text-gray-800 dark:text-app-text">
+          <h2 className="text-base font-semibold">
             {isEditing ? 'Editar producto' : 'Agregar producto'}
           </h2>
           <button
             onClick={onClose}
-            className="text-gray-400 dark:text-app-muted hover:text-gray-600 dark:hover:text-app-text p-1 rounded-lg hover:bg-gray-100 dark:hover:bg-app-card transition-colors"
+            className="text-muted-foreground hover:text-foreground p-1 rounded-lg hover:bg-muted transition-colors"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -89,19 +89,19 @@ export default function ProductModal({ product, onClose, onSuccess }: ProductMod
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <div className="flex flex-col gap-1">
-            <label className="text-xs font-medium text-gray-600 dark:text-app-muted">Nombre</label>
+            <label className="text-xs font-medium text-muted-foreground">Nombre</label>
             <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Ej: Pelota de pádel"
-              className="border border-gray-300 dark:border-app-border dark:bg-app-card dark:text-app-text rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+              className="border border-input bg-background text-foreground rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
               autoFocus
             />
           </div>
 
           <div className="flex flex-col gap-1">
-            <label className="text-xs font-medium text-gray-600 dark:text-app-muted">Precio de venta (por unidad)</label>
+            <label className="text-xs font-medium text-muted-foreground">Precio de venta (por unidad)</label>
             <input
               type="number"
               value={salePrice}
@@ -109,12 +109,12 @@ export default function ProductModal({ product, onClose, onSuccess }: ProductMod
               placeholder="0"
               min="0"
               step="0.01"
-              className="border border-gray-300 dark:border-app-border dark:bg-app-card dark:text-app-text rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+              className="border border-input bg-background text-foreground rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
             />
           </div>
 
           <div className="flex flex-col gap-1">
-            <label className="text-xs font-medium text-gray-600 dark:text-app-muted">Precio de compra (costo total del stock)</label>
+            <label className="text-xs font-medium text-muted-foreground">Precio de compra (costo total del stock)</label>
             <input
               type="number"
               value={purchasePrice}
@@ -122,12 +122,12 @@ export default function ProductModal({ product, onClose, onSuccess }: ProductMod
               placeholder="0"
               min="0"
               step="0.01"
-              className="border border-gray-300 dark:border-app-border dark:bg-app-card dark:text-app-text rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+              className="border border-input bg-background text-foreground rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
             />
           </div>
 
           <div className="flex flex-col gap-1">
-            <label className="text-xs font-medium text-gray-600 dark:text-app-muted">Stock disponible</label>
+            <label className="text-xs font-medium text-muted-foreground">Stock disponible</label>
             <input
               type="number"
               value={stock}
@@ -135,7 +135,7 @@ export default function ProductModal({ product, onClose, onSuccess }: ProductMod
               placeholder="0"
               min="0"
               step="1"
-              className="border border-gray-300 dark:border-app-border dark:bg-app-card dark:text-app-text rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+              className="border border-input bg-background text-foreground rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
             />
           </div>
 
@@ -149,7 +149,7 @@ export default function ProductModal({ product, onClose, onSuccess }: ProductMod
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 border border-gray-200 dark:border-app-border rounded-lg py-2 text-sm text-gray-600 dark:text-app-muted hover:bg-gray-50 dark:hover:bg-app-card transition-colors"
+              className="flex-1 border border-border rounded-lg py-2 text-sm text-muted-foreground hover:bg-muted transition-colors"
             >
               Cancelar
             </button>

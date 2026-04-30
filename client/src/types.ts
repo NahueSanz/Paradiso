@@ -12,6 +12,7 @@ export interface User {
   email: string;
   name: string;
   role: 'owner' | 'employee';
+  isEmailVerified: boolean;
 }
 
 export interface Membership {
@@ -60,8 +61,9 @@ export type TimeSlot = string;
  * Produced client-side from ScheduleFixedReservation — never stored as-is.
  */
 export interface VirtualFixedReservation {
-  readonly id: string;              // "fixed-{n}" — string discriminates from Reservation
-  readonly rawId: number;           // numeric id for API update calls
+  readonly id: string;                    // "fixed-{n}" — string discriminates from Reservation
+  readonly rawId: number;                 // instanceId — used for pay/cancel instance calls
+  readonly fixedReservationId: number;    // series/rule id — used for delete series calls
   readonly courtId: number;
   readonly dayOfWeek: number;
   readonly duration: number;        // minutes

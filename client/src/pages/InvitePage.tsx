@@ -17,9 +17,9 @@ export default function InvitePage() {
 
   if (!token) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
+      <div className="min-h-screen flex items-center justify-center bg-background px-4">
         <div className="text-center">
-          <p className="text-gray-500 text-sm">Link de invitación inválido o expirado.</p>
+          <p className="text-muted-foreground text-sm">Link de invitación inválido o expirado.</p>
         </div>
       </div>
     );
@@ -52,19 +52,19 @@ export default function InvitePage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
+    <div className="min-h-screen flex items-center justify-center bg-background px-4">
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
-          <h1 className="text-2xl font-bold text-indigo-700 tracking-tight">Padel Paradiso</h1>
-          <p className="text-sm text-gray-500 mt-1">Creá tu contraseña para unirte al club</p>
+          <h1 className="text-2xl font-bold text-indigo-700 tracking-tight">ClubFlow</h1>
+          <p className="text-sm text-muted-foreground mt-1">Creá tu contraseña para unirte al club</p>
         </div>
 
         <form
           onSubmit={handleSubmit}
-          className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6 space-y-4"
+          className="bg-card rounded-2xl shadow-sm border border-border p-6 space-y-4"
         >
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-foreground mb-1">
               Nueva contraseña
             </label>
             <input
@@ -75,13 +75,13 @@ export default function InvitePage() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm
-                         focus:outline-none focus:ring-2 focus:ring-indigo-400"
+              className="w-full border border-input bg-background text-foreground rounded-lg px-3 py-2 text-sm
+                         focus:outline-none focus:ring-2 focus:ring-ring"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-foreground mb-1">
               Repetir contraseña
             </label>
             <input
@@ -91,8 +91,8 @@ export default function InvitePage() {
               value={password2}
               onChange={(e) => setPassword2(e.target.value)}
               placeholder="••••••••"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm
-                         focus:outline-none focus:ring-2 focus:ring-indigo-400"
+              className="w-full border border-input bg-background text-foreground rounded-lg px-3 py-2 text-sm
+                         focus:outline-none focus:ring-2 focus:ring-ring"
             />
           </div>
 

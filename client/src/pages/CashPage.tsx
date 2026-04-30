@@ -72,13 +72,13 @@ function AddManualModal({ onClose, onSuccess }: AddManualModalProps) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="bg-white dark:bg-app-surface rounded-2xl shadow-xl w-full max-w-md">
-        <div className="px-6 py-5 border-b border-gray-100 dark:border-app-border">
-          <h2 className="text-base font-semibold text-gray-900 dark:text-app-text">Nuevo movimiento manual</h2>
+      <div className="bg-card text-card-foreground rounded-2xl shadow-xl w-full max-w-md">
+        <div className="px-6 py-5 border-b border-border">
+          <h2 className="text-base font-semibold">Nuevo movimiento manual</h2>
         </div>
         <form onSubmit={handleSubmit} className="px-6 py-5 flex flex-col gap-4">
           <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-gray-700 dark:text-app-text">Monto</label>
+            <label className="text-sm font-medium text-foreground">Monto</label>
             <input
               type="number"
               min="0"
@@ -86,25 +86,25 @@ function AddManualModal({ onClose, onSuccess }: AddManualModalProps) {
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
               placeholder="0"
-              className="border border-gray-200 dark:border-app-border dark:bg-app-card dark:text-app-text rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
+              className="border border-input bg-background text-foreground rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
             />
           </div>
           <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-gray-700 dark:text-app-text">Descripción</label>
+            <label className="text-sm font-medium text-foreground">Descripción</label>
             <input
               type="text"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Ej: Ingreso por alquiler"
-              className="border border-gray-200 dark:border-app-border dark:bg-app-card dark:text-app-text rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
+              className="border border-input bg-background text-foreground rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
             />
           </div>
           <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-gray-700 dark:text-app-text">Medio de pago</label>
+            <label className="text-sm font-medium text-foreground">Medio de pago</label>
             <select
               value={paymentMethod}
               onChange={(e) => setPaymentMethod(e.target.value as 'cash' | 'mercadopago')}
-              className="border border-gray-200 dark:border-app-border dark:bg-app-card dark:text-app-text rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-300"
+              className="border border-input bg-background text-foreground rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
             >
               <option value="cash">Efectivo</option>
               <option value="mercadopago">Mercado Pago</option>
@@ -115,7 +115,7 @@ function AddManualModal({ onClose, onSuccess }: AddManualModalProps) {
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-sm font-medium text-gray-600 dark:text-app-muted hover:bg-gray-100 dark:hover:bg-app-card rounded-lg transition-colors"
+              className="px-4 py-2 text-sm font-medium text-muted-foreground hover:bg-muted rounded-lg transition-colors"
             >
               Cancelar
             </button>
@@ -197,8 +197,8 @@ export default function CashPage() {
     <div className="p-6 max-w-5xl mx-auto space-y-6">
       <div className="flex items-start justify-between flex-wrap gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-app-text">Caja</h1>
-          <p className="text-sm text-gray-500 dark:text-app-muted mt-0.5">Resumen e historial de movimientos</p>
+          <h1 className="text-2xl font-bold text-foreground">Caja</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">Resumen e historial de movimientos</p>
         </div>
         <button
           onClick={() => setShowModal(true)}
@@ -215,7 +215,7 @@ export default function CashPage() {
 
       {!selectedClubId && (
         <div className="flex flex-col items-center justify-center py-24 text-center gap-3">
-          <p className="text-lg font-semibold text-gray-700 dark:text-app-text">Seleccioná un club</p>
+          <p className="text-lg font-semibold text-foreground">Seleccioná un club</p>
         </div>
       )}
 
@@ -227,7 +227,7 @@ export default function CashPage() {
         <>
           {/* Date filter */}
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-xs font-medium text-gray-500 dark:text-app-muted">Período:</span>
+            <span className="text-xs font-medium text-muted-foreground">Período:</span>
             {(['today', '7d', '30d'] as DatePreset[]).map((p) => (
               <button
                 key={p}
@@ -235,43 +235,43 @@ export default function CashPage() {
                 className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-colors ${
                   preset === p
                     ? 'bg-indigo-600 text-white'
-                    : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-app-muted hover:bg-gray-200 dark:hover:bg-slate-600'
+                    : 'bg-muted text-muted-foreground hover:bg-muted/80'
                 }`}
               >
                 {PRESET_LABELS[p]}
               </button>
             ))}
-            <span className="text-xs text-gray-400 dark:text-app-muted ml-2">
+            <span className="text-xs text-muted-foreground ml-2">
               Mostrando: {PRESET_LABELS[preset]}
             </span>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-            <div className="bg-white dark:bg-app-card rounded-2xl shadow-sm border border-gray-100 dark:border-app-border p-5 flex flex-col gap-1">
-              <p className="text-sm font-medium text-gray-500 dark:text-app-muted">Total efectivo</p>
+            <div className="bg-card rounded-2xl shadow-sm border border-border p-5 flex flex-col gap-1">
+              <p className="text-sm font-medium text-muted-foreground">Total efectivo</p>
               <p className="text-2xl font-bold text-emerald-600">
                 {loading ? '—' : fmtMoney(totalCash)}
               </p>
             </div>
-            <div className="bg-white dark:bg-app-card rounded-2xl shadow-sm border border-gray-100 dark:border-app-border p-5 flex flex-col gap-1">
-              <p className="text-sm font-medium text-gray-500 dark:text-app-muted">Total Mercado Pago</p>
+            <div className="bg-card rounded-2xl shadow-sm border border-border p-5 flex flex-col gap-1">
+              <p className="text-sm font-medium text-muted-foreground">Total Mercado Pago</p>
               <p className="text-2xl font-bold text-blue-600">
                 {loading ? '—' : fmtMoney(totalMercadopago)}
               </p>
             </div>
-            <div className="bg-white dark:bg-app-card rounded-2xl shadow-sm border border-gray-100 dark:border-app-border p-5 flex flex-col gap-1">
-              <p className="text-sm font-medium text-gray-500 dark:text-app-muted">Total general</p>
+            <div className="bg-card rounded-2xl shadow-sm border border-border p-5 flex flex-col gap-1">
+              <p className="text-sm font-medium text-muted-foreground">Total general</p>
               <p className="text-2xl font-bold text-indigo-700 dark:text-indigo-400">
                 {loading ? '—' : fmtMoney(totalIncome)}
               </p>
             </div>
           </div>
 
-          <div className="bg-white dark:bg-app-card rounded-2xl shadow-sm border border-gray-100 dark:border-app-border overflow-hidden">
+          <div className="bg-card rounded-2xl shadow-sm border border-border overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="text-xs text-gray-400 dark:text-app-muted uppercase tracking-wide bg-gray-50 dark:bg-slate-700/50">
+                  <tr className="text-xs text-muted-foreground uppercase tracking-wide bg-muted/50">
                     <th className="px-6 py-3 text-left font-medium">Fecha</th>
                     <th className="px-6 py-3 text-left font-medium">Tipo</th>
                     <th className="px-6 py-3 text-left font-medium">Descripción</th>
@@ -281,32 +281,32 @@ export default function CashPage() {
                     <th className="px-6 py-3 text-right font-medium">Acciones</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-100 dark:divide-app-border">
+                <tbody className="divide-y divide-border">
                   {loading ? (
                     <tr>
-                      <td colSpan={7} className="px-6 py-8 text-center text-gray-300 dark:text-slate-600">Cargando…</td>
+                      <td colSpan={7} className="px-6 py-8 text-center text-muted-foreground">Cargando…</td>
                     </tr>
                   ) : movements.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="px-6 py-8 text-center text-gray-300 dark:text-slate-600">Sin movimientos para {PRESET_LABELS[preset].toLowerCase()}</td>
+                      <td colSpan={7} className="px-6 py-8 text-center text-muted-foreground">Sin movimientos para {PRESET_LABELS[preset].toLowerCase()}</td>
                     </tr>
                   ) : (
                     movements.map((m) => (
                       <tr
                         key={m.id}
-                        className={`hover:bg-gray-50 dark:hover:bg-slate-700/30 transition-colors ${m.status === 'cancelled' ? 'opacity-50' : ''}`}
+                        className={`hover:bg-muted/50 transition-colors ${m.status === 'cancelled' ? 'opacity-50' : ''}`}
                       >
-                        <td className="px-6 py-3 text-gray-500 dark:text-app-muted whitespace-nowrap">{fmtDate(m.createdAt)}</td>
+                        <td className="px-6 py-3 text-muted-foreground whitespace-nowrap">{fmtDate(m.createdAt)}</td>
                         <td className="px-6 py-3">
                           <span className={`inline-block text-xs font-semibold px-2 py-0.5 rounded-full ${
                             m.type === 'sale'
                               ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300'
-                              : 'bg-gray-100 dark:bg-slate-700 text-gray-600 dark:text-slate-300'
+                              : 'bg-muted text-muted-foreground'
                           }`}>
                             {m.type === 'sale' ? 'Venta' : 'Manual'}
                           </span>
                         </td>
-                        <td className="px-6 py-3 text-gray-700 dark:text-app-text max-w-xs truncate">{m.description}</td>
+                        <td className="px-6 py-3 text-foreground max-w-xs truncate">{m.description}</td>
                         <td className="px-6 py-3">
                           <span className={`inline-block text-xs font-semibold px-2 py-0.5 rounded-full ${
                             m.paymentMethod === 'cash'

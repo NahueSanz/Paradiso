@@ -69,12 +69,12 @@ export default function SellProductModal({ product, onClose, onSuccess }: SellPr
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6">
+      <div className="bg-card text-card-foreground rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6">
         <div className="flex items-center justify-between mb-5">
-          <h2 className="text-base font-semibold text-gray-800">Vender producto</h2>
+          <h2 className="text-base font-semibold">Vender producto</h2>
           <button
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-600 p-1 rounded-lg hover:bg-gray-100 transition-colors"
+            className="text-muted-foreground hover:text-foreground p-1 rounded-lg hover:bg-muted transition-colors"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -83,18 +83,18 @@ export default function SellProductModal({ product, onClose, onSuccess }: SellPr
         </div>
 
         {/* Product info */}
-        <div className="bg-indigo-50 rounded-xl px-4 py-3 mb-4">
-          <p className="text-xs text-indigo-500 font-medium mb-0.5">Producto</p>
-          <p className="text-sm font-semibold text-indigo-800">{product.name}</p>
+        <div className="bg-indigo-50 dark:bg-indigo-950/30 rounded-xl px-4 py-3 mb-4">
+          <p className="text-xs text-indigo-500 dark:text-indigo-400 font-medium mb-0.5">Producto</p>
+          <p className="text-sm font-semibold text-indigo-800 dark:text-indigo-200">{product.name}</p>
           <div className="flex items-center gap-4 mt-1">
-            <span className="text-xs text-indigo-600">{fmtMoney(product.salePrice)} / unidad</span>
-            <span className="text-xs text-indigo-600">Stock: {product.stock}</span>
+            <span className="text-xs text-indigo-600 dark:text-indigo-300">{fmtMoney(product.salePrice)} / unidad</span>
+            <span className="text-xs text-indigo-600 dark:text-indigo-300">Stock: {product.stock}</span>
           </div>
         </div>
 
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <div className="flex flex-col gap-1">
-            <label className="text-xs font-medium text-gray-600">Cantidad a vender</label>
+            <label className="text-xs font-medium text-muted-foreground">Cantidad a vender</label>
             <input
               type="number"
               value={quantity}
@@ -102,17 +102,17 @@ export default function SellProductModal({ product, onClose, onSuccess }: SellPr
               min="1"
               max={product.stock}
               step="1"
-              className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400"
+              className="border border-input bg-background text-foreground rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
               autoFocus
             />
           </div>
 
           <div className="flex flex-col gap-1">
-            <label className="text-xs font-medium text-gray-600">Método de pago</label>
+            <label className="text-xs font-medium text-muted-foreground">Método de pago</label>
             <select
               value={paymentMethod}
               onChange={(e) => setPaymentMethod(e.target.value as SellProductPayload['paymentMethod'])}
-              className="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-white"
+              className="border border-input bg-background text-foreground rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
             >
               {PAYMENT_METHODS.map((m) => (
                 <option key={m.value} value={m.value}>{m.label}</option>
@@ -122,9 +122,9 @@ export default function SellProductModal({ product, onClose, onSuccess }: SellPr
 
           {/* Total preview */}
           {total > 0 && (
-            <div className="flex items-center justify-between bg-gray-50 rounded-xl px-4 py-3 border border-gray-100">
-              <span className="text-sm text-gray-500">Total</span>
-              <span className="text-base font-bold text-emerald-600">{fmtMoney(total)}</span>
+            <div className="flex items-center justify-between bg-muted rounded-xl px-4 py-3 border border-border">
+              <span className="text-sm text-muted-foreground">Total</span>
+              <span className="text-base font-bold text-emerald-600 dark:text-emerald-400">{fmtMoney(total)}</span>
             </div>
           )}
 
@@ -138,7 +138,7 @@ export default function SellProductModal({ product, onClose, onSuccess }: SellPr
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 border border-gray-200 rounded-lg py-2 text-sm text-gray-600 hover:bg-gray-50 transition-colors"
+              className="flex-1 border border-border rounded-lg py-2 text-sm text-muted-foreground hover:bg-muted transition-colors"
             >
               Cancelar
             </button>

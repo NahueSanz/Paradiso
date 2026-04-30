@@ -29,6 +29,7 @@ interface Props {
   onPayAmount: (id: number, amount: number) => Promise<Reservation>;
   onUpdateNote: (id: number, note: string | null) => Promise<void>;
   onDelete: (id: number) => Promise<void>;
+  onFixedSuccess?: () => void;
 }
 
 // ── constantes ────────────────────────────────────────────────────────────────
@@ -104,16 +105,15 @@ export default function ReservationModal({
   onPayAmount,
   onUpdateNote,
   onDelete,
+  onFixedSuccess,
 }: Props) {
   const { reservation, courtName, date, slot } = state;
   const isEdit = !!reservation;
 
-  // ── live reservation (updated after payments/notes without closing modal) ──
   const [liveReservation, setLiveReservation] = useState<Reservation | null>(
     reservation ?? null,
   );
 
-  // ── financial snapshot from live data ──
   const savedTotal   = liveReservation?.totalPrice   != null ? parseFloat(liveReservation.totalPrice)   : 0;
   const savedDeposit = liveReservation?.depositAmount != null ? parseFloat(liveReservation.depositAmount) : 0;
   const savedPaid    = liveReservation?.paidAmount    != null ? parseFloat(liveReservation.paidAmount)    : null;
@@ -125,7 +125,6 @@ export default function ReservationModal({
   const isPartialPay     = savedTotal > 0 && savedPaid !== null && savedPaid > 0 && savedPaid < savedTotal;
   const isDepositCovered = savedDeposit > 0 && savedPaid !== null && savedPaid >= savedDeposit;
 
-  // ── estado del formulario ──
   const [clientName,    setClientName]    = useState(reservation?.clientName ?? "");
   const [clientPhone,   setClientPhone]   = useState(reservation?.clientPhone ?? "");
   const [type,          setType]          = useState(reservation?.type ?? "booking");
@@ -141,24 +140,20 @@ export default function ReservationModal({
   const [busy,  setBusy]                = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
 
-  // ── payment input state ──
   const [paymentInput,   setPaymentInput]   = useState("");
   const [paymentBusy,    setPaymentBusy]    = useState(false);
   const [paymentError,   setPaymentError]   = useState("");
   const [paymentSuccess, setPaymentSuccess] = useState(false);
 
-  // ── internal note state ──
   const [noteText,  setNoteText]  = useState(reservation?.internalNote ?? "");
   const [noteBusy,  setNoteBusy]  = useState(false);
   const [noteSaved, setNoteSaved] = useState(false);
   const [noteError, setNoteError] = useState("");
 
-  // ── estado turno fijo ──
   const [isTurnoFijo,   setIsTurnoFijo]   = useState(false);
   const [fixedDayOfWeek, setFixedDayOfWeek] = useState<number>(1);
   const [fixedWarning,  setFixedWarning]  = useState(false);
 
-  // ── estado de duración ──
   const initDuration = isEdit
     ? durationFromReservation(reservation!)
     : { duration: defaultDurationForType(type), customMinutes: "" };
@@ -172,12 +167,10 @@ export default function ReservationModal({
     setCustomMinutes("");
   }, [type, isEdit]);
 
-  // ── tiempos calculados ──
   const effectiveMinutes = duration === "custom" ? parseInt(customMinutes || "0", 10) : parseInt(duration, 10);
   const timeStart = slot;
   const timeEnd   = effectiveMinutes > 0 ? addMinutes(slot, effectiveMinutes) : "";
 
-  // ── validación precio / seña ──
   const depositExceedsTotal =
     totalPrice !== '' && depositAmount !== '' &&
     parseFloat(depositAmount) > parseFloat(totalPrice);
@@ -263,6 +256,7 @@ export default function ReservationModal({
           if (res?.warning) {
             setFixedWarning(true);
           } else {
+            onFixedSuccess?.();
             onClose();
           }
         })
@@ -283,8 +277,6 @@ export default function ReservationModal({
       })
     );
   }
-
-  // ── payment handlers ──────────────────────────────────────────────────────
 
   async function handleRegisterPayment(overrideAmount?: number) {
     const rawAmount = overrideAmount !== undefined ? overrideAmount : parseFloat(paymentInput);
@@ -308,8 +300,6 @@ export default function ReservationModal({
     }
   }
 
-  // ── note handler ──────────────────────────────────────────────────────────
-
   async function handleSaveNote() {
     setNoteBusy(true);
     setNoteSaved(false);
@@ -330,20 +320,20 @@ export default function ReservationModal({
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
       onMouseDown={handleBackdrop}
     >
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 animate-in fade-in zoom-in-95 duration-150 overflow-y-auto max-h-[90vh]">
+      <div className="bg-card text-card-foreground rounded-2xl shadow-2xl w-full max-w-md mx-4 animate-in fade-in zoom-in-95 duration-150 overflow-y-auto max-h-[90vh]">
 
         {/* ── encabezado ── */}
-        <div className="flex items-start justify-between px-6 pt-6 pb-4 border-b">
+        <div className="flex items-start justify-between px-6 pt-6 pb-4 border-b border-border">
           <div>
-            <h2 className="text-base font-semibold text-gray-900">
+            <h2 className="text-base font-semibold">
               {isEdit ? "Editar Reserva" : "Nueva Reserva"}
             </h2>
-            <p className="text-xs text-gray-400 mt-0.5">
+            <p className="text-xs text-muted-foreground mt-0.5">
               {courtName} &middot; {date}
               {timeEnd && (
-                <span className="font-medium text-gray-600">
+                <span className="font-medium text-foreground">
                   {" "}&middot; {timeStart} – {timeEnd}
-                  <span className="text-gray-400 font-normal"> ({effectiveMinutes} min)</span>
+                  <span className="text-muted-foreground font-normal"> ({effectiveMinutes} min)</span>
                 </span>
               )}
             </p>
@@ -372,7 +362,7 @@ export default function ReservationModal({
           </div>
           <button
             onClick={onClose}
-            className="text-gray-300 hover:text-gray-500 text-2xl leading-none -mt-1 -mr-1 transition-colors"
+            className="text-muted-foreground hover:text-foreground text-2xl leading-none -mt-1 -mr-1 transition-colors"
           >
             &times;
           </button>
@@ -382,13 +372,13 @@ export default function ReservationModal({
         {isEdit && (reservation?.createdByMembership || reservation?.updatedByMembership) && (
           <div className="mx-6 mt-3 flex flex-wrap gap-x-4 gap-y-0.5">
             {reservation?.createdByMembership && (
-              <span className="text-[11px] text-gray-400">
-                Creado por: <span className="font-medium text-gray-500">{reservation.createdByMembership.displayName}</span>
+              <span className="text-[11px] text-muted-foreground">
+                Creado por: <span className="font-medium">{reservation.createdByMembership.displayName}</span>
               </span>
             )}
             {reservation?.updatedByMembership && (
-              <span className="text-[11px] text-gray-400">
-                Última edición: <span className="font-medium text-gray-500">{reservation.updatedByMembership.displayName}</span>
+              <span className="text-[11px] text-muted-foreground">
+                Última edición: <span className="font-medium">{reservation.updatedByMembership.displayName}</span>
               </span>
             )}
           </div>
@@ -396,32 +386,32 @@ export default function ReservationModal({
 
         {/* ── resumen financiero (solo en edición) ── */}
         {isEdit && (
-          <div className="mx-6 mt-4 rounded-xl bg-gray-50 border border-gray-200 px-4 py-3 space-y-1">
+          <div className="mx-6 mt-4 rounded-xl bg-muted border border-border px-4 py-3 space-y-1">
             <div className="flex justify-between text-sm">
-              <span className="text-gray-500">Total</span>
-              <span className="font-bold text-gray-800 text-base">{formatCurrency(savedTotal)}</span>
+              <span className="text-muted-foreground">Total</span>
+              <span className="font-bold text-foreground text-base">{formatCurrency(savedTotal)}</span>
             </div>
             {savedDeposit > 0 && (
               <div className="flex justify-between text-sm">
-                <span className="text-gray-500">Seña</span>
-                <span className="font-semibold text-gray-700">{formatCurrency(savedDeposit)}</span>
+                <span className="text-muted-foreground">Seña</span>
+                <span className="font-semibold text-foreground">{formatCurrency(savedDeposit)}</span>
               </div>
             )}
             {savedPaid !== null && (
               <div className="flex justify-between text-sm">
-                <span className="text-gray-500">Pagado</span>
+                <span className="text-muted-foreground">Pagado</span>
                 <span className="font-semibold text-emerald-700">{formatCurrency(savedPaid)}</span>
               </div>
             )}
-            <div className="flex justify-between text-sm border-t border-gray-200 pt-1 mt-1">
+            <div className="flex justify-between text-sm border-t border-border pt-1 mt-1">
               {isPaidFull ? (
                 <>
-                  <span className="text-gray-500">Estado</span>
+                  <span className="text-muted-foreground">Estado</span>
                   <span className="font-bold text-emerald-600">Pagado ✓</span>
                 </>
               ) : (
                 <>
-                  <span className="text-gray-500">Restante</span>
+                  <span className="text-muted-foreground">Restante</span>
                   <span className="font-bold text-red-500">{formatCurrency(savedRemaining)}</span>
                 </>
               )}
@@ -434,12 +424,11 @@ export default function ReservationModal({
           </div>
         )}
 
-        {/* ── registrar pago (solo en edición, y solo si hay precio y no está pagado) ── */}
+        {/* ── registrar pago ── */}
         {isEdit && savedTotal > 0 && !isPaidFull && (
-          <div className="mx-6 mt-3 rounded-xl border border-indigo-100 bg-indigo-50/60 px-4 py-3 space-y-2.5">
-            <p className="text-xs font-semibold text-indigo-700 uppercase tracking-wide">Registrar pago</p>
+          <div className="mx-6 mt-3 rounded-xl border border-indigo-200 dark:border-indigo-800 bg-indigo-50/60 dark:bg-indigo-950/30 px-4 py-3 space-y-2.5">
+            <p className="text-xs font-semibold text-indigo-700 dark:text-indigo-300 uppercase tracking-wide">Registrar pago</p>
 
-            {/* Quick amounts */}
             <div className="flex gap-1.5 flex-wrap">
               {QUICK_AMOUNTS.map((amt) => (
                 <button
@@ -451,7 +440,7 @@ export default function ReservationModal({
                       String((parseFloat(prev || "0") || 0) + amt)
                     )
                   }
-                  className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-indigo-200 bg-white text-indigo-700 hover:border-indigo-400 hover:bg-indigo-50 transition-colors disabled:opacity-50"
+                  className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-indigo-200 bg-background text-indigo-700 hover:border-indigo-400 hover:bg-indigo-50 transition-colors disabled:opacity-50"
                 >
                   +{formatCurrency(amt)}
                 </button>
@@ -461,14 +450,13 @@ export default function ReservationModal({
                   type="button"
                   disabled={paymentBusy}
                   onClick={() => handleRegisterPayment(savedRemaining)}
-                  className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-emerald-300 bg-white text-emerald-700 hover:bg-emerald-50 transition-colors disabled:opacity-50"
+                  className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-emerald-300 bg-background text-emerald-700 hover:bg-emerald-50 transition-colors disabled:opacity-50"
                 >
                   Pago completo ({formatCurrency(savedRemaining)})
                 </button>
               )}
             </div>
 
-            {/* Custom amount input */}
             <div className="flex gap-2">
               <input
                 type="number"
@@ -477,7 +465,7 @@ export default function ReservationModal({
                 value={paymentInput}
                 onChange={(e) => { setPaymentInput(e.target.value); setPaymentError(""); }}
                 placeholder="Otro monto…"
-                className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 bg-white transition-shadow"
+                className="flex-1 border border-input rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring bg-background text-foreground transition-shadow"
               />
               <button
                 type="button"
@@ -490,7 +478,7 @@ export default function ReservationModal({
             </div>
 
             {paymentError && (
-              <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-1.5">
+              <p className="text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900 rounded-lg px-3 py-1.5">
                 {paymentError}
               </p>
             )}
@@ -503,7 +491,7 @@ export default function ReservationModal({
         {/* ── nota interna (solo en edición) ── */}
         {isEdit && (
           <div className="mx-6 mt-3">
-            <label className="block text-xs font-medium text-gray-500 mb-1">
+            <label className="block text-xs font-medium text-muted-foreground mb-1">
               Nota interna
             </label>
             <textarea
@@ -511,7 +499,7 @@ export default function ReservationModal({
               onChange={(e) => { setNoteText(e.target.value); setNoteSaved(false); }}
               placeholder="Notas para el equipo…"
               rows={2}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 resize-none transition-shadow"
+              className="w-full border border-input rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring bg-background text-foreground resize-none transition-shadow"
             />
             <div className="flex items-center justify-between mt-1">
               <span className="text-xs">
@@ -538,7 +526,7 @@ export default function ReservationModal({
         >
           {/* Nombre del cliente */}
           <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1">
+            <label className="block text-xs font-medium text-muted-foreground mb-1">
               Nombre del cliente <span className="text-red-400">*</span>
             </label>
             <input
@@ -548,14 +536,14 @@ export default function ReservationModal({
               onChange={(e) => setClientName(e.target.value)}
               placeholder="Juan Pérez"
               required
-              className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 transition-shadow"
+              className="w-full border border-input rounded-lg px-3 py-2 text-sm bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring transition-shadow"
             />
           </div>
 
           {/* Teléfono (opcional) */}
           <div>
-            <label className="block text-xs font-medium text-gray-500 mb-1">
-              Teléfono <span className="text-gray-400 font-normal">(opcional)</span>
+            <label className="block text-xs font-medium text-muted-foreground mb-1">
+              Teléfono <span className="text-red-400">*</span>
             </label>
             <input
               type="tel"
@@ -563,18 +551,18 @@ export default function ReservationModal({
               onChange={(e) => setClientPhone(e.target.value)}
               placeholder="11 1234-5678"
               maxLength={20}
-              className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 transition-shadow"
+              className="w-full border border-input rounded-lg px-3 py-2 text-sm bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring transition-shadow"
             />
           </div>
 
           {/* Tipo + Duración */}
           <div className="flex gap-3">
             <div className="flex-1">
-              <label className="block text-xs font-medium text-gray-500 mb-1">Tipo</label>
+              <label className="block text-xs font-medium text-muted-foreground mb-1">Tipo</label>
               <select
                 value={type}
                 onChange={(e) => setType(e.target.value)}
-                className="w-full border rounded-lg px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-400 transition-shadow"
+                className="w-full border border-input rounded-lg px-3 py-2 text-sm text-foreground bg-background focus:outline-none focus:ring-2 focus:ring-ring transition-shadow"
               >
                 {Object.entries(RESERVATION_TYPE_LABELS).map(([value, label]) => (
                   <option key={value} value={value}>{label}</option>
@@ -583,11 +571,11 @@ export default function ReservationModal({
             </div>
 
             <div className="flex-1">
-              <label className="block text-xs font-medium text-gray-500 mb-1">Duración</label>
+              <label className="block text-xs font-medium text-muted-foreground mb-1">Duración</label>
               <select
                 value={duration}
                 onChange={(e) => { setDuration(e.target.value); setCustomMinutes(""); }}
-                className="w-full border rounded-lg px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-indigo-400 transition-shadow"
+                className="w-full border border-input rounded-lg px-3 py-2 text-sm text-foreground bg-background focus:outline-none focus:ring-2 focus:ring-ring transition-shadow"
               >
                 {DURATION_OPTIONS.map(({ value, label }) => (
                   <option key={value} value={value}>{label}</option>
@@ -599,7 +587,7 @@ export default function ReservationModal({
           {/* Duración personalizada */}
           {duration === "custom" && (
             <div>
-              <label className="block text-xs font-medium text-gray-500 mb-1">
+              <label className="block text-xs font-medium text-muted-foreground mb-1">
                 Duración en minutos <span className="text-red-400">*</span>
               </label>
               <input
@@ -611,14 +599,14 @@ export default function ReservationModal({
                 onChange={(e) => setCustomMinutes(e.target.value)}
                 placeholder="Ej: 150"
                 required
-                className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 transition-shadow"
+                className="w-full border border-input rounded-lg px-3 py-2 text-sm bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring transition-shadow"
               />
             </div>
           )}
 
           {/* ── Turno fijo (solo en creación) ── */}
           {!isEdit && (
-            <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 space-y-3">
+            <div className="rounded-xl border border-border bg-muted px-4 py-3 space-y-3">
               <label className="flex items-center gap-3 cursor-pointer select-none">
                 <div className="relative">
                   <input
@@ -630,15 +618,15 @@ export default function ReservationModal({
                       setFixedWarning(false);
                     }}
                   />
-                  <div className="w-9 h-5 bg-gray-300 rounded-full peer-checked:bg-indigo-500 transition-colors" />
-                  <div className="absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform peer-checked:translate-x-4" />
+                  <div className="w-9 h-5 bg-input rounded-full peer-checked:bg-indigo-500 transition-colors" />
+                  <div className="absolute top-0.5 left-0.5 w-4 h-4 bg-background rounded-full shadow transition-transform peer-checked:translate-x-4" />
                 </div>
-                <span className="text-sm font-medium text-gray-700">Turno fijo</span>
+                <span className="text-sm font-medium text-foreground">Turno fijo</span>
               </label>
 
               {isTurnoFijo && (
                 <div>
-                  <p className="text-xs font-medium text-gray-500 mb-2">Día de la semana</p>
+                  <p className="text-xs font-medium text-muted-foreground mb-2">Día de la semana</p>
                   <div className="flex gap-1.5 flex-wrap">
                     {DAYS_OF_WEEK.map(({ label, value }) => (
                       <button
@@ -648,7 +636,7 @@ export default function ReservationModal({
                         className={`px-3 py-1.5 text-xs font-semibold rounded-lg border transition-colors
                           ${fixedDayOfWeek === value
                             ? "bg-indigo-600 text-white border-indigo-600"
-                            : "border-gray-300 text-gray-600 hover:border-indigo-400 hover:text-indigo-600"
+                            : "border-input text-muted-foreground hover:border-primary hover:text-primary"
                           }`}
                       >
                         {label}
@@ -662,11 +650,11 @@ export default function ReservationModal({
 
           {/* ── Warning turno fijo ── */}
           {fixedWarning && (
-            <div className="flex items-start gap-3 rounded-xl border border-yellow-300 bg-yellow-50 px-4 py-3">
+            <div className="flex items-start gap-3 rounded-xl border border-yellow-300 dark:border-yellow-800 bg-yellow-50 dark:bg-yellow-950/20 px-4 py-3">
               <span className="text-lg leading-none mt-0.5">⚠️</span>
               <div className="flex-1">
-                <p className="text-sm font-semibold text-yellow-800">Superposición detectada</p>
-                <p className="text-xs text-yellow-700 mt-0.5">
+                <p className="text-sm font-semibold text-yellow-800 dark:text-yellow-300">Superposición detectada</p>
+                <p className="text-xs text-yellow-700 dark:text-yellow-400 mt-0.5">
                   Este turno fijo se superpone con una reserva existente.
                 </p>
               </div>
@@ -683,7 +671,7 @@ export default function ReservationModal({
           {/* Precio total + Seña */}
           <div className="flex gap-3">
             <div className="flex-1">
-              <label className="block text-xs font-medium text-gray-500 mb-1">
+              <label className="block text-xs font-medium text-muted-foreground mb-1">
                 Precio total ($)
               </label>
               <input
@@ -693,11 +681,11 @@ export default function ReservationModal({
                 value={totalPrice}
                 onChange={(e) => setTotalPrice(e.target.value)}
                 placeholder="0"
-                className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 transition-shadow"
+                className="w-full border border-input rounded-lg px-3 py-2 text-sm bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring transition-shadow"
               />
             </div>
             <div className="flex-1">
-              <label className="block text-xs font-medium text-gray-500 mb-1">
+              <label className="block text-xs font-medium text-muted-foreground mb-1">
                 Seña ($)
               </label>
               <input
@@ -707,13 +695,13 @@ export default function ReservationModal({
                 value={depositAmount}
                 onChange={(e) => setDepositAmount(e.target.value)}
                 placeholder="0"
-                className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-400 transition-shadow"
+                className="w-full border border-input rounded-lg px-3 py-2 text-sm bg-background text-foreground focus:outline-none focus:ring-2 focus:ring-ring transition-shadow"
               />
             </div>
           </div>
 
           {isFree && (
-            <p className="text-xs text-gray-400 -mt-1">Reserva sin costo</p>
+            <p className="text-xs text-muted-foreground -mt-1">Reserva sin costo</p>
           )}
 
           {depositExceedsTotal && (
@@ -723,7 +711,7 @@ export default function ReservationModal({
           )}
 
           {error && (
-            <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+            <p className="text-sm text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900 rounded-lg px-3 py-2">
               {error}
             </p>
           )}
@@ -736,7 +724,7 @@ export default function ReservationModal({
               type="button"
               disabled={busy}
               onClick={() => setConfirmingDelete(true)}
-              className="text-xs text-gray-400 hover:text-red-500 transition-colors"
+              className="text-xs text-muted-foreground hover:text-destructive transition-colors"
             >
               Eliminar
             </button>
@@ -745,7 +733,7 @@ export default function ReservationModal({
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-sm text-gray-500 hover:text-gray-800 transition-colors"
+              className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
             >
               Cancelar
             </button>
@@ -770,16 +758,16 @@ export default function ReservationModal({
       {/* ── Delete Reservation Confirm Overlay ── */}
       {confirmingDelete && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6">
-            <h2 className="text-lg font-bold text-gray-800 mb-2">Eliminar reserva</h2>
-            <p className="text-sm text-gray-500 mb-6">¿Estás seguro? Esta acción no se puede deshacer.</p>
+          <div className="bg-card text-card-foreground rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6">
+            <h2 className="text-lg font-bold mb-2">Eliminar reserva</h2>
+            <p className="text-sm text-muted-foreground mb-6">¿Estás seguro? Esta acción no se puede deshacer.</p>
             <div className="flex gap-2">
               <button
                 type="button"
                 onClick={() => setConfirmingDelete(false)}
                 disabled={busy}
-                className="flex-1 px-4 py-2 text-sm rounded-lg border border-gray-200 text-gray-600
-                           hover:bg-gray-50 disabled:opacity-50 transition-colors"
+                className="flex-1 px-4 py-2 text-sm rounded-lg border border-border text-muted-foreground
+                           hover:bg-muted disabled:opacity-50 transition-colors"
               >
                 Cancelar
               </button>

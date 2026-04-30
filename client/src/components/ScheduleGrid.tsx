@@ -29,13 +29,22 @@ function toHHMM(timeStr: string): string {
   return timeStr.length > 5 ? timeStr.slice(11, 16) : timeStr.slice(0, 5);
 }
 
-type HasTimes = { timeStart: string; timeEnd: string };
+function computeTimeEnd(timeStart: string, duration: number): string {
+  const base = toHHMM(timeStart);
+  const [h, m] = base.split(':').map(Number);
+  const total = h * 60 + m + duration;
+  const rh = Math.floor(total / 60) % 24;
+  const rm = total % 60;
+  return `${String(rh).padStart(2, '0')}:${String(rm).padStart(2, '0')}`;
+}
+
+type HasTimes = { timeStart: string; duration: number };
 
 function coversSlot(r: HasTimes, slot: TimeSlot, openVirtual: number): boolean {
   const slotStart = slotToVirtualMinutes(slot, openVirtual);
   const slotEnd   = slotStart + 30;
   const startMin  = toVirtualMinutes(r.timeStart, openVirtual);
-  const endMin    = toVirtualMinutes(r.timeEnd, openVirtual);
+  const endMin    = toVirtualMinutes(computeTimeEnd(r.timeStart, r.duration), openVirtual);
   return startMin < slotEnd && endMin > slotStart;
 }
 
@@ -55,21 +64,20 @@ function formatCurrency(amount: number): string {
 
 // ── transform: ScheduleFixedReservation → VirtualFixedReservation ─────────────
 
-function toVirtual(f: ScheduleFixedReservation, currentDate: string): VirtualFixedReservation {
-  const paidToday = f.lastPaidAt != null && f.lastPaidAt.slice(0, 10) === currentDate;
+function toVirtual(f: ScheduleFixedReservation): VirtualFixedReservation {
   return {
-    id:            `fixed-${f.id}`,
-    rawId:         f.id,
-    courtId:       f.courtId,
+    id:                  `fixed-${f.id}`,
+    rawId:               f.id,
+    fixedReservationId:  f.fixedReservationId,
+    courtId:             f.courtId,
     dayOfWeek:     f.dayOfWeek,
     duration:      f.duration,
     timeStart:     f.timeStart,
-    timeEnd:       f.timeEnd,
     clientName:    f.clientName,
     clientPhone:   f.clientPhone ?? null,
     type:          f.type ?? null,
     isFixed:       true,
-    paymentStatus: paidToday ? 'paid' : 'pending',
+    paymentStatus: f.paymentStatus ?? 'pending',
     totalPrice:    f.totalPrice    ?? null,
     depositAmount: f.depositAmount ?? null,
     carryOver:     f.carryOver,
@@ -127,7 +135,7 @@ function Cell({ entry, onClick }: CellProps) {
   const remaining = total - deposit;
   const fullyPaid = !fixed && (entry as Reservation).paymentStatus === 'paid' || (total > 0 && remaining <= 0);
 
-  const timeRange = `${toHHMM(entry.timeStart)} – ${toHHMM(entry.timeEnd)}`;
+  const timeRange = `${toHHMM(entry.timeStart)} – ${computeTimeEnd(entry.timeStart, entry.duration)}`;
   const isPaidStyle = !fixed && (entry as Reservation).paymentStatus === 'paid';
 
   return (
@@ -261,7 +269,7 @@ export default function ScheduleGrid({
         if (cancelled) return;
 
         // Transform fixed reservations into virtual entries
-        const virtual = fixedReservations.map((f) => toVirtual(f, date));
+        const virtual = fixedReservations.map((f) => toVirtual(f));
 
         // Merge and sort by courtId then timeStart (virtual minutes)
         const merged: ScheduleEntry[] = [...reservations, ...virtual].sort((a, b) => {
@@ -282,7 +290,7 @@ export default function ScheduleGrid({
   }, [date, clubId, refreshKey, openVirtual]);
 
   if (loading) {
-    return <p className="text-center text-gray-400 py-16">Cargando…</p>;
+    return <p className="text-center text-muted-foreground py-16">Cargando…</p>;
   }
 
   if (error) {
@@ -296,9 +304,9 @@ export default function ScheduleGrid({
   if (courts.length === 0) {
     return (
       <div className="text-center py-16">
-        <p className="text-slate-400 dark:text-slate-500">No hay canchas disponibles.</p>
+        <p className="text-muted-foreground">No hay canchas disponibles.</p>
         {isOwner && (
-          <p className="text-sm text-slate-400 dark:text-slate-500 mt-1">
+          <p className="text-sm text-muted-foreground mt-1">
             Usá el botón <strong>"Agregar cancha"</strong> para crear la primera.
           </p>
         )}
@@ -337,18 +345,18 @@ export default function ScheduleGrid({
 
   return (
     <>
-      <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-slate-700">
+      <div className="overflow-x-auto rounded-lg border border-border">
         <table className="min-w-full border-separate border-spacing-1">
           <thead>
             <tr>
               {/* Sticky time header */}
-              <th className="sticky left-0 z-20 bg-white dark:bg-slate-900 w-14 text-xs text-slate-400 dark:text-slate-500 font-normal text-right pr-2">
+              <th className="sticky left-0 z-20 bg-background w-14 text-xs text-muted-foreground font-normal text-right pr-2">
                 Hora
               </th>
               {courts.map((court) => (
                 <th
                   key={court.id}
-                  className={`${colWidth} text-sm font-semibold text-center text-slate-700 dark:text-slate-200 pb-1 group`}
+                  className={`${colWidth} text-sm font-semibold text-center text-foreground pb-1 group`}
                 >
                   <div className="flex items-center justify-center gap-0.5">
                     <span className="truncate">{court.name}</span>
@@ -363,7 +371,7 @@ export default function ScheduleGrid({
                             }}
                             title={`Renombrar ${court.name}`}
                             className="opacity-0 group-hover:opacity-100 transition-opacity ml-0.5 p-0.5 rounded
-                                       text-slate-300 dark:text-slate-600 hover:text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-900/30"
+                                       text-muted-foreground hover:text-indigo-500 hover:bg-indigo-50 dark:hover:bg-indigo-900/30"
                           >
                             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
@@ -376,7 +384,7 @@ export default function ScheduleGrid({
                             onClick={() => setPendingDelete(court)}
                             title={`Eliminar ${court.name}`}
                             className="opacity-0 group-hover:opacity-100 transition-opacity ml-0.5 p-0.5 rounded
-                                       text-slate-300 dark:text-slate-600 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30"
+                                       text-muted-foreground hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30"
                           >
                             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
@@ -395,7 +403,7 @@ export default function ScheduleGrid({
             {SLOTS.map((slot) => (
               <tr key={slot}>
                 {/* Sticky time cell */}
-                <td className="sticky left-0 z-10 bg-white dark:bg-slate-900 text-xs text-slate-400 dark:text-slate-500 text-right pr-2 align-top pt-1 whitespace-nowrap shadow-[1px_0_0_0_#e2e8f0] dark:shadow-[1px_0_0_0_#334155]">
+                <td className="sticky left-0 z-10 bg-background text-xs text-muted-foreground text-right pr-2 align-top pt-1 whitespace-nowrap border-r border-border">
                   {slot}
                 </td>
                 {courts.map((court) => {
@@ -429,9 +437,9 @@ export default function ScheduleGrid({
       {/* ── Delete Court Modal ── */}
       {pendingDelete && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6">
-            <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-2">Eliminar cancha</h2>
-            <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">
+          <div className="bg-card text-card-foreground rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6">
+            <h2 className="text-lg font-bold mb-2">Eliminar cancha</h2>
+            <p className="text-sm text-muted-foreground mb-6">
               ¿Estás seguro? Esta acción no se puede deshacer.
             </p>
             <div className="flex gap-2">
@@ -439,8 +447,8 @@ export default function ScheduleGrid({
                 type="button"
                 onClick={() => setPendingDelete(null)}
                 disabled={deletingCourt}
-                className="flex-1 px-4 py-2 text-sm rounded-lg border border-slate-200 dark:border-slate-600 text-slate-600 dark:text-slate-300
-                           hover:bg-slate-50 dark:hover:bg-slate-700 disabled:opacity-50 transition-colors"
+                className="flex-1 px-4 py-2 text-sm rounded-lg border border-border text-muted-foreground
+                           hover:bg-muted disabled:opacity-50 transition-colors"
               >
                 Cancelar
               </button>
@@ -461,21 +469,21 @@ export default function ScheduleGrid({
       {/* ── Rename Court Modal ── */}
       {pendingRename && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
-          <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6">
-            <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-4">Renombrar cancha</h2>
+          <div className="bg-card text-card-foreground rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6">
+            <h2 className="text-lg font-bold mb-4">Renombrar cancha</h2>
             <form onSubmit={confirmRename} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Nombre</label>
+                <label className="block text-sm font-medium text-foreground mb-1">Nombre</label>
                 <input
                   ref={renameInputRef}
                   type="text"
                   value={renameValue}
                   onChange={(e) => setRenameValue(e.target.value)}
-                  className="w-full border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 text-sm
-                             bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100
-                             focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                  className="w-full border border-input rounded-lg px-3 py-2 text-sm
+                             bg-background text-foreground
+                             focus:outline-none focus:ring-2 focus:ring-ring"
                 />
-                {renameError && <p className="text-xs text-red-600 dark:text-red-400 mt-1">{renameError}</p>}
+                {renameError && <p className="text-xs text-red-600 mt-1">{renameError}</p>}
               </div>
               <div className="flex gap-2">
                 <button

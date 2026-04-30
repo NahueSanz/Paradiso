@@ -60,56 +60,56 @@ export default function SettingsPage() {
 
   return (
     <div className="max-w-2xl mx-auto p-4 sm:p-6">
-      <h1 className="text-xl font-bold text-slate-800 dark:text-slate-100 mb-1">Configuración</h1>
-      <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">
+      <h1 className="text-xl font-bold text-foreground mb-1">Configuración</h1>
+      <p className="text-sm text-muted-foreground mb-6">
         Ajustes del club
       </p>
 
       {/* Opening hours section */}
-      <section className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
-        <div className="px-5 py-4 border-b border-slate-200 dark:border-slate-700">
-          <h2 className="text-base font-semibold text-slate-800 dark:text-slate-100">
+      <section className="bg-card rounded-xl border border-border overflow-hidden">
+        <div className="px-5 py-4 border-b border-border">
+          <h2 className="text-base font-semibold text-foreground">
             Horarios del club
           </h2>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+          <p className="text-xs text-muted-foreground mt-0.5">
             Horario predeterminado por día de la semana. Podés sobreescribir días individuales desde Turnos.
           </p>
         </div>
 
         {loading ? (
-          <p className="text-center text-slate-400 py-10 text-sm">Cargando…</p>
+          <p className="text-center text-muted-foreground py-10 text-sm">Cargando…</p>
         ) : (
-          <div className="divide-y divide-slate-100 dark:divide-slate-700">
+          <div className="divide-y divide-border">
             {schedule.map((day, idx) => (
               <div
                 key={day.dayOfWeek}
                 className="flex items-center gap-3 px-5 py-3"
               >
-                <span className="w-24 text-sm font-medium text-slate-700 dark:text-slate-300 shrink-0">
+                <span className="w-24 text-sm font-medium text-foreground shrink-0">
                   {DAY_NAMES[day.dayOfWeek]}
                 </span>
                 <div className="flex items-center gap-2 flex-wrap">
                   <div className="flex items-center gap-1.5">
-                    <span className="text-xs text-slate-400 dark:text-slate-500">Apertura</span>
+                    <span className="text-xs text-muted-foreground">Apertura</span>
                     <input
                       type="time"
                       value={day.openTime}
                       onChange={(e) => updateDay(idx, 'openTime', e.target.value)}
-                      className="border border-slate-300 dark:border-slate-600 rounded-lg px-2 py-1 text-sm
-                                 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100
-                                 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                      className="border border-input rounded-lg px-2 py-1 text-sm
+                                 bg-background text-foreground
+                                 focus:outline-none focus:ring-2 focus:ring-ring"
                     />
                   </div>
-                  <span className="text-slate-300 dark:text-slate-600">–</span>
+                  <span className="text-muted-foreground">–</span>
                   <div className="flex items-center gap-1.5">
-                    <span className="text-xs text-slate-400 dark:text-slate-500">Cierre</span>
+                    <span className="text-xs text-muted-foreground">Cierre</span>
                     <input
                       type="time"
                       value={day.closeTime}
                       onChange={(e) => updateDay(idx, 'closeTime', e.target.value)}
-                      className="border border-slate-300 dark:border-slate-600 rounded-lg px-2 py-1 text-sm
-                                 bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-100
-                                 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                      className="border border-input rounded-lg px-2 py-1 text-sm
+                                 bg-background text-foreground
+                                 focus:outline-none focus:ring-2 focus:ring-ring"
                     />
                   </div>
                 </div>
@@ -118,8 +118,8 @@ export default function SettingsPage() {
           </div>
         )}
 
-        <div className="px-5 py-4 border-t border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
-          <p className="text-[11px] text-slate-400 dark:text-slate-500 mb-3">
+        <div className="px-5 py-4 border-t border-border bg-muted/50">
+          <p className="text-[11px] text-muted-foreground mb-3">
             Si el cierre es menor a la apertura se interpreta como el día siguiente (ej: 09:00 → 01:00).
           </p>
           <button

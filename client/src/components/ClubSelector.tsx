@@ -32,12 +32,12 @@ export function CreateClubModal({ onClose, onCreated }: { onClose: () => void; o
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6">
-        <h2 className="text-lg font-bold text-gray-800 mb-4">Crear club</h2>
+      <div className="bg-card text-card-foreground rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6">
+        <h2 className="text-lg font-bold mb-4">Crear club</h2>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-muted-foreground mb-1">
               Nombre del club
             </label>
             <input
@@ -46,18 +46,18 @@ export function CreateClubModal({ onClose, onCreated }: { onClose: () => void; o
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Ej: Club Padel Norte"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none
-                         focus:ring-2 focus:ring-indigo-400"
+              className="w-full border border-input bg-background text-foreground rounded-lg px-3 py-2 text-sm focus:outline-none
+                         focus:ring-2 focus:ring-ring"
             />
-            {error && <p className="text-xs text-red-600 mt-1">{error}</p>}
+            {error && <p className="text-xs text-red-600 dark:text-red-400 mt-1">{error}</p>}
           </div>
 
           <div className="flex gap-2 pt-1">
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 px-4 py-2 text-sm rounded-lg border border-gray-200 text-gray-600
-                         hover:bg-gray-50 transition-colors"
+              className="flex-1 px-4 py-2 text-sm rounded-lg border border-border text-muted-foreground
+                         hover:bg-muted transition-colors"
             >
               Cancelar
             </button>
@@ -105,9 +105,9 @@ export default function ClubSelector() {
             <select
               value={selectedClubId ?? ''}
               onChange={(e) => setSelectedClubId(Number(e.target.value))}
-              className="appearance-none border border-gray-300 rounded-lg pl-3 pr-8 py-1.5 text-sm
-                         font-medium text-gray-700 bg-white focus:outline-none focus:ring-2
-                         focus:ring-indigo-400 cursor-pointer"
+              className="appearance-none border border-border rounded-lg pl-3 pr-8 py-1.5 text-sm
+                         font-medium text-foreground bg-background focus:outline-none focus:ring-2
+                         focus:ring-ring cursor-pointer"
             >
               {clubs.map((club) => (
                 <option key={club.id} value={club.id}>
@@ -117,7 +117,7 @@ export default function ClubSelector() {
             </select>
             {/* Chevron icon */}
             <div className="pointer-events-none absolute inset-y-0 right-2 flex items-center">
-              <svg className="w-3.5 h-3.5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-3.5 h-3.5 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
               </svg>
             </div>
@@ -160,8 +160,8 @@ export function NoClubsEmptyState({ onCreateClick }: { onCreateClick: () => void
         </svg>
       </div>
       <div>
-        <p className="text-xl font-semibold text-gray-800">No tenés clubes todavía</p>
-        <p className="text-sm text-gray-500 mt-1">Creá tu primer club para empezar a gestionar canchas y reservas.</p>
+        <p className="text-xl font-semibold text-foreground">No tenés clubes todavía</p>
+        <p className="text-sm text-muted-foreground mt-1">Creá tu primer club para empezar a gestionar canchas y reservas.</p>
       </div>
       <button
         onClick={onCreateClick}

@@ -4,7 +4,8 @@ import type { Club, Court, FixedReservation, Membership, PaymentStatus, PlayStat
 // Returned by GET /schedule for the fixed-reservations array.
 // timeEnd is pre-computed on the server (timeStart + duration).
 export interface ScheduleFixedReservation {
-  id: number;
+  id: number;                  // instanceId
+  fixedReservationId: number;  // series/rule id — used for delete operations
   courtId: number;
   dayOfWeek: number;
   timeStart: string;          // "HH:MM"
@@ -17,6 +18,8 @@ export interface ScheduleFixedReservation {
   depositAmount: string | null;
   carryOver: string;          // rolling deposit carry-over, "0" by default
   lastPaidAt: string | null;  // ISO datetime of last payment, null if never paid
+  paymentStatus: PaymentStatus;
+  status: string;
   active: boolean;
   court: { id: number; name: string };
 }
@@ -207,6 +210,8 @@ export function getFixedReservations(clubId: number): Promise<FixedReservation[]
 }
 
 export interface UpdateFixedReservationPayload {
+  scope: 'occurrence' | 'thisAndFuture';
+  instanceId?: number;
   clientName: string;
   clientPhone?: string | null;
   timeStart: string;
@@ -224,23 +229,36 @@ export function toggleFixedReservation(id: number): Promise<FixedReservationResp
   return request(`/fixed-reservations/${id}/toggle`, { method: 'PATCH', headers: clubIdHeader() });
 }
 
-export function deleteFixedReservation(id: number): Promise<void> {
-  return request(`/fixed-reservations/${id}`, { method: 'DELETE', headers: clubIdHeader() });
+export function deleteFixedReservation(id: number, fromDate: string): Promise<void> {
+  return request(`/fixed-reservations/${id}`, {
+    method: 'DELETE',
+    body: JSON.stringify({ fromDate }),
+    headers: clubIdHeader(),
+  });
+}
+
+/** Cancels a single weekly occurrence without ending the whole series. */
+export function cancelFixedOccurrence(instanceId: number): Promise<void> {
+  return request(`/fixed-reservations/instances/${instanceId}/cancel`, {
+    method: 'PATCH',
+    headers: clubIdHeader(),
+  });
 }
 
 export interface PayFixedReservationResponse {
-  id: number;
-  carryOver: string;
-  todayPays: number;
+  instanceId: number;
+  amountDue: number;
   pricePerSlot: number;
-  depositAmount: number;
+  carryOverDeposit: number;
   isLastWeek: boolean;
+  paidAt: string;
+  alreadyPaid: boolean;
 }
 
-export function payFixedReservation(id: number, isLastWeek: boolean): Promise<PayFixedReservationResponse> {
-  return request(`/fixed-reservations/${id}/pay`, {
-    method: 'PATCH',
-    body: JSON.stringify({ isLastWeek }),
+export function payFixedReservation(instanceId: number, isLastWeek: boolean, paymentMethod: string): Promise<PayFixedReservationResponse> {
+  return request(`/fixed-reservations/instances/${instanceId}/pay`, {
+    method: 'POST',
+    body: JSON.stringify({ isLastWeek, paymentMethod }),
     headers: clubIdHeader(),
   });
 }
@@ -290,6 +308,8 @@ export interface CashMovement {
   amount: number;
   paymentMethod: string;
   relatedProductId?: number | null;
+  fixedReservationInstanceId?: number | null;
+  relatedReservationId?: number | null;
   createdAt: string;
 }
 

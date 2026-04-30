@@ -53,32 +53,32 @@ export default function AddMovementModal({ onClose, onSuccess }: Props) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6">
-        <h2 className="text-lg font-bold text-gray-800 mb-5">Agregar movimiento</h2>
+      <div className="bg-card text-card-foreground rounded-2xl shadow-xl w-full max-w-sm mx-4 p-6">
+        <h2 className="text-lg font-bold mb-5">Agregar movimiento</h2>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* Concept */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Concepto</label>
+            <label className="block text-sm font-medium text-muted-foreground mb-1">Concepto</label>
             <input
               ref={conceptRef}
               type="text"
               value={concept}
               onChange={(e) => setConcept(e.target.value)}
               placeholder="Ej: Powerade"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none
-                         focus:ring-2 focus:ring-indigo-400"
+              className="w-full border border-input bg-background text-foreground rounded-lg px-3 py-2 text-sm focus:outline-none
+                         focus:ring-2 focus:ring-ring"
             />
           </div>
 
           {/* Type */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Tipo</label>
+            <label className="block text-sm font-medium text-muted-foreground mb-1">Tipo</label>
             <select
               value={type}
               onChange={(e) => setType(e.target.value as 'income' | 'expense')}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none
-                         focus:ring-2 focus:ring-indigo-400 bg-white"
+              className="w-full border border-input bg-background text-foreground rounded-lg px-3 py-2 text-sm focus:outline-none
+                         focus:ring-2 focus:ring-ring"
             >
               <option value="income">Ingreso</option>
               <option value="expense">Egreso</option>
@@ -87,7 +87,7 @@ export default function AddMovementModal({ onClose, onSuccess }: Props) {
 
           {/* Amount */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Monto</label>
+            <label className="block text-sm font-medium text-muted-foreground mb-1">Monto</label>
             <input
               type="number"
               min="0.01"
@@ -95,19 +95,19 @@ export default function AddMovementModal({ onClose, onSuccess }: Props) {
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
               placeholder="0"
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none
-                         focus:ring-2 focus:ring-indigo-400"
+              className="w-full border border-input bg-background text-foreground rounded-lg px-3 py-2 text-sm focus:outline-none
+                         focus:ring-2 focus:ring-ring"
             />
           </div>
 
           {/* Payment method */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Método de pago</label>
+            <label className="block text-sm font-medium text-muted-foreground mb-1">Método de pago</label>
             <select
               value={paymentMethod}
               onChange={(e) => setPaymentMethod(e.target.value)}
-              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none
-                         focus:ring-2 focus:ring-indigo-400 bg-white"
+              className="w-full border border-input bg-background text-foreground rounded-lg px-3 py-2 text-sm focus:outline-none
+                         focus:ring-2 focus:ring-ring"
             >
               {PAYMENT_METHODS.map((m) => (
                 <option key={m} value={m}>{m}</option>
@@ -121,8 +121,8 @@ export default function AddMovementModal({ onClose, onSuccess }: Props) {
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 px-4 py-2 text-sm rounded-lg border border-gray-200 text-gray-600
-                         hover:bg-gray-50 transition-colors"
+              className="flex-1 px-4 py-2 text-sm rounded-lg border border-border text-muted-foreground
+                         hover:bg-muted transition-colors"
             >
               Cancelar
             </button>

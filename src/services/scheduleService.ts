@@ -1,9 +1,6 @@
 import { Prisma } from '@prisma/client';
 import prisma from '../lib/prisma';
 import { AppError } from '../middlewares/errorHandler';
-import { computeTimeEnd } from './fixedReservationService';
-
-// ── helpers (mirrors reservationService — not exported there) ─────────────────
 
 function parseDate(dateStr: string): Date {
   return new Date(`${dateStr}T00:00:00.000Z`);
@@ -21,34 +18,11 @@ function withRemainingAmount<
   return { ...r, remainingAmount };
 }
 
-// ── public return types ───────────────────────────────────────────────────────
-
-export interface ScheduleFixedReservation {
-  id: number;
-  courtId: number;
-  dayOfWeek: number;
-  timeStart: string;     // "HH:MM"
-  timeEnd: string;       // "HH:MM"  (pre-computed from timeStart + duration)
-  duration: number;
-  clientName: string;
-  clientPhone: string | null;
-  type: string;
-  totalPrice: string | null;
-  depositAmount: string | null;
-  carryOver: string;     // rolling deposit carry-over, default "0"
-  lastPaidAt: string | null; // ISO date string of last payment, null if never paid
-  active: boolean;
-  court: { id: number; name: string };
-}
-
-// ── service ───────────────────────────────────────────────────────────────────
-
 export async function getScheduleByDateAndClub(
   dateStr: string,
   clubId: number,
   userId: number,
 ) {
-  // Auth: caller must hold a membership in the target club
   const membership = await prisma.membership.findUnique({
     where: { userId_clubId: { userId, clubId } },
   });
@@ -56,11 +30,6 @@ export async function getScheduleByDateAndClub(
 
   const date = parseDate(dateStr);
 
-  // Derive day-of-week from the date string directly (avoids TZ shifts)
-  const [year, month, day] = dateStr.split('-').map(Number);
-  const dayOfWeek = new Date(Date.UTC(year, month - 1, day)).getUTCDay(); // 0 = Sunday
-
-  // ── normal reservations ──────────────────────────────────────────────────
   const reservations = await prisma.reservation.findMany({
     where: {
       date,
@@ -74,38 +43,35 @@ export async function getScheduleByDateAndClub(
     orderBy: [{ courtId: 'asc' }, { timeStart: 'asc' }],
   });
 
-  // ── active fixed reservations — only for today and future dates ──────────
-  const now = new Date();
-  const todayUTC = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-  const requestedDateUTC = new Date(Date.UTC(year, month - 1, day));
-  const isPast = requestedDateUTC < todayUTC;
-
-  const fixed = isPast ? [] : await prisma.fixedReservation.findMany({
+  const instances = await prisma.fixedReservationInstance.findMany({
     where: {
-      active: true,
-      dayOfWeek,
-      court: { clubId },
+      date,
+      clubId,
+      status: { not: 'cancelled' },
     },
-    include: { court: { select: { id: true, name: true } } },
+    include: {
+      court: { select: { id: true, name: true } },
+      fixedReservation: { select: { dayOfWeek: true } },
+    },
     orderBy: [{ courtId: 'asc' }, { timeStart: 'asc' }],
   });
 
-  const fixedReservations: ScheduleFixedReservation[] = fixed.map((f) => ({
-    id:            f.id,
-    courtId:       f.courtId,
-    dayOfWeek:     f.dayOfWeek,
-    timeStart:     f.timeStart,
-    timeEnd:       computeTimeEnd(f.timeStart, f.duration),
-    duration:      f.duration,
-    clientName:    f.clientName,
-    clientPhone:   f.clientPhone ?? null,
-    type:          f.type,
-    totalPrice:    f.totalPrice    != null ? String(f.totalPrice)    : null,
-    depositAmount: f.depositAmount != null ? String(f.depositAmount) : null,
-    carryOver:     String(f.carryOver),
-    lastPaidAt:    f.lastPaidAt != null ? f.lastPaidAt.toISOString() : null,
-    active:        f.active,
-    court:         f.court,
+  const fixedReservations = instances.map((inst) => ({
+    id:                inst.id,
+    fixedReservationId: inst.fixedReservationId,
+    courtId:           inst.courtId,
+    dayOfWeek:         inst.fixedReservation.dayOfWeek,
+    timeStart:         inst.timeStart,
+    duration:          inst.duration,
+    clientName:        inst.clientName,
+    clientPhone:       inst.clientPhone ?? null,
+    type:              inst.type,
+    totalPrice:        inst.totalPrice    != null ? String(inst.totalPrice)    : null,
+    depositAmount:     inst.depositAmount != null ? String(inst.depositAmount) : null,
+    carryOver:         String(inst.carryOverDeposit),
+    lastPaidAt:        inst.paidAt != null ? inst.paidAt.toISOString() : null,
+    paymentStatus:     inst.paymentStatus,
+    court:             inst.court,
   }));
 
   return {
