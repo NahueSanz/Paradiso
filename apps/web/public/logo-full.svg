@@ -1,0 +1,21 @@
+<svg width="220" height="60" viewBox="0 0 220 60" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Icon background -->
+  <rect x="0" y="0" width="60" height="60" rx="16" fill="#0f172a"></rect>
+
+  <!-- Racket circle -->
+  <circle cx="30" cy="28" r="14" stroke="#84cc16" stroke-width="3"></circle>
+
+  <!-- Racket handle -->
+  <rect x="26" y="38" width="8" height="12" rx="3" fill="#84cc16"></rect>
+
+  <!-- Ball -->
+  <circle cx="46" cy="42" r="5" fill="#84cc16"></circle>
+
+  <!-- Text -->
+  <text x="75" y="35" font-family="Inter, sans-serif" font-size="20" font-weight="600" fill="#ffffff">
+    Club
+  </text>
+  <text x="125" y="35" font-family="Inter, sans-serif" font-size="20" font-weight="600" fill="#84cc16">
+    Flow
+  </text>
+</svg>
