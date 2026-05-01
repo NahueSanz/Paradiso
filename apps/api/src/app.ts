@@ -18,7 +18,7 @@ process.on("unhandledRejection", (reason) => {
 const app = express();
 
 const corsOptions = {
-  origin: ["http://localhost:5173", "https://paradiso-nine.vercel.app"],
+  origin: ["http://localhost:5173", "https://clubflow-nine.vercel.app"],
   credentials: true,
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization", "X-Club-Id"],
