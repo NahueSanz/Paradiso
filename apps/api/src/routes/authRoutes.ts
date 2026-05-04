@@ -3,8 +3,6 @@ import rateLimit from 'express-rate-limit';
 import {
   register,
   login,
-  verifyEmail,
-  resendVerification,
   forgotPassword,
   resetPassword,
 } from '../controllers/authController';
@@ -26,20 +24,10 @@ const forgotPasswordLimiter = rateLimit({
   message: { status: 'error', message: 'Demasiados intentos. Por favor esperá 15 minutos e intentá de nuevo.' },
 });
 
-const resendLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 5,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { status: 'error', message: 'Demasiados intentos. Esperá 15 minutos antes de reenviar.' },
-});
-
 const router = Router();
 
 router.post('/register',             registerLimiter,       asyncHandler(register));
 router.post('/login',                                       asyncHandler(login));
-router.post('/verify-email',                               asyncHandler(verifyEmail));
-router.post('/resend-verification',  resendLimiter, asyncHandler(resendVerification));
 router.post('/forgot-password',      forgotPasswordLimiter, asyncHandler(forgotPassword));
 router.post('/reset-password',                             asyncHandler(resetPassword));
 

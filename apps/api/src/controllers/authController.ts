@@ -4,7 +4,7 @@ import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import prisma from '../lib/prisma';
 import { Role } from '@prisma/client';
-import { sendPasswordResetEmail, sendVerificationEmail } from '../services/emailService';
+import { sendPasswordResetEmail } from '../services/emailService';
 
 const JWT_SECRET = process.env.JWT_SECRET!;
 const JWT_EXPIRES_IN = '7d';
@@ -23,8 +23,6 @@ function sanitizeUser(user: Record<string, unknown>) {
     password: _pw,
     resetPasswordToken: _rpt,
     resetPasswordExpires: _rpe,
-    emailVerificationToken: _evt,
-    emailVerificationExpires: _eve,
     ...safe
   } = user;
   return safe;
@@ -47,31 +45,19 @@ export async function register(req: Request, res: Response): Promise<void> {
   }
 
   const hashed = await bcrypt.hash(password, 10);
-  const { rawToken, hashedToken } = generateToken();
-  const expires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 h
 
-  const user = await prisma.user.create({
+  await prisma.user.create({
     data: {
       email,
       password: hashed,
       name: name ?? email,
       role: (role as Role) ?? Role.employee,
-      isEmailVerified: false,
-      emailVerificationToken: hashedToken,
-      emailVerificationExpires: expires,
     },
   });
 
-  try {
-    await sendVerificationEmail(user.email, rawToken);
-  } catch (err) {
-    // Keep the user — they can request a new link via resend-verification.
-    console.error('[EMAIL_VERIFICATION_FAILED]', { email: user.email, error: err });
-  }
-
   res.status(201).json({
     status: 'success',
-    message: 'Cuenta creada. Revisá tu correo para verificar tu cuenta.',
+    message: 'Cuenta creada correctamente.',
   });
 }
 
@@ -97,114 +83,11 @@ export async function login(req: Request, res: Response): Promise<void> {
     return;
   }
 
-  if (!user.isEmailVerified) {
-    res.status(403).json({
-      status: 'error',
-      code: 'EMAIL_NOT_VERIFIED',
-      message: 'Debés verificar tu email antes de iniciar sesión.',
-    });
-    return;
-  }
-
   const token = jwt.sign({ id: user.id, role: user.role }, JWT_SECRET, {
     expiresIn: JWT_EXPIRES_IN,
   });
 
   res.json({ status: 'success', token, user: sanitizeUser(user as unknown as Record<string, unknown>) });
-}
-
-// ─── verifyEmail ──────────────────────────────────────────────────────────────
-
-export async function verifyEmail(req: Request, res: Response): Promise<void> {
-  const { token } = req.body;
-
-  const genericError = 'El enlace es inválido o ha expirado.';
-
-  if (!token) {
-    res.status(400).json({ status: 'error', message: genericError });
-    return;
-  }
-
-  const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
-
-  const userByToken = await prisma.user.findFirst({
-    where: { emailVerificationToken: hashedToken },
-  });
-
-  if (!userByToken) {
-    console.warn('[auth] Unknown email verification token used');
-    res.status(400).json({ status: 'error', message: genericError });
-    return;
-  }
-
-  if (userByToken.isEmailVerified) {
-    // Already verified — idempotent success, no info leak
-    res.json({ status: 'success', message: 'Cuenta verificada correctamente.' });
-    return;
-  }
-
-  const expired =
-    !userByToken.emailVerificationExpires ||
-    userByToken.emailVerificationExpires < new Date();
-
-  if (expired) {
-    console.warn(`[auth] Expired email verification token for user id=${userByToken.id}`);
-    res.status(400).json({ status: 'error', message: genericError });
-    return;
-  }
-
-  await prisma.user.update({
-    where: { id: userByToken.id },
-    data: {
-      isEmailVerified: true,
-      emailVerificationToken: null,
-      emailVerificationExpires: null,
-    },
-  });
-
-  res.json({ status: 'success', message: 'Cuenta verificada correctamente.' });
-}
-
-// ─── resendVerification ───────────────────────────────────────────────────────
-
-export async function resendVerification(req: Request, res: Response): Promise<void> {
-  const { email } = req.body;
-
-  // Always return the same message to prevent email enumeration
-  const successMsg = 'Si existe una cuenta con ese email, recibirás un nuevo enlace de verificación.';
-
-  if (!email) {
-    res.json({ status: 'success', message: successMsg });
-    return;
-  }
-
-  const user = await prisma.user.findUnique({ where: { email } });
-
-  if (user && !user.isEmailVerified) {
-    const { rawToken, hashedToken } = generateToken();
-    const expires = new Date(Date.now() + 24 * 60 * 60 * 1000);
-
-    await prisma.user.update({
-      where: { id: user.id },
-      data: {
-        emailVerificationToken: hashedToken,
-        emailVerificationExpires: expires,
-      },
-    });
-
-    try {
-      await sendVerificationEmail(user.email, rawToken);
-    } catch (err) {
-      console.error('[auth] Failed to resend verification email:', err);
-      res.status(500).json({
-        status: 'error',
-        message: 'No se pudo enviar el correo. Intentá de nuevo.',
-      });
-      return;
-    }
-  }
-
-  res.json({ status: 'success', message: successMsg });
 }
 
 // ─── forgotPassword ───────────────────────────────────────────────────────────

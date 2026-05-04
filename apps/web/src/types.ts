@@ -12,7 +12,6 @@ export interface User {
   email: string;
   name: string;
   role: 'owner' | 'employee';
-  isEmailVerified: boolean;
 }
 
 export interface Membership {

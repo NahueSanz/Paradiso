@@ -106,6 +106,7 @@ export default function FixedReservationModal({ courts, editData, selectedDate, 
   const [isLastWeek,    setIsLastWeek]    = useState(false);
   const [payError,      setPayError]      = useState('');
   const [payBusy,       setPayBusy]       = useState(false);
+  const [localPaidAt,   setLocalPaidAt]   = useState<string | null>(editData?.lastPaidAt ?? null);
 
   const [deleteMode,  setDeleteMode]  = useState<'none' | 'occurrence' | 'series'>('none');
   const [deleteBusy,  setDeleteBusy]  = useState(false);
@@ -123,9 +124,9 @@ export default function FixedReservationModal({ courts, editData, selectedDate, 
     setPayError('');
     setPayBusy(true);
     try {
-      await payFixedReservation(editData.rawId, isLastWeek, 'cash');
+      const res = await payFixedReservation(editData.rawId, isLastWeek, 'cash');
+      setLocalPaidAt(res.paidAt);
       onSuccess('Pago registrado correctamente.');
-      onClose();
     } catch (err) {
       setPayError((err as Error).message || 'Error al registrar el pago.');
     } finally {
@@ -261,9 +262,7 @@ export default function FixedReservationModal({ courts, editData, selectedDate, 
   const payPricePerSlot = isEditMode ? (parseFloat(String(editData.totalPrice   ?? '0')) || 0) : 0;
   const payDeposit      = isEditMode ? (parseFloat(String(editData.depositAmount ?? '0')) || 0) : 0;
   const payCarryOver    = isEditMode ? (parseFloat(String(editData.carryOver     ?? '0')) || 0) : 0;
-  const paidToday = isEditMode
-    ? (editData.lastPaidAt != null && selectedDate != null && editData.lastPaidAt.slice(0, 10) === selectedDate)
-    : false;
+  const paidToday = localPaidAt != null;
 
   const todayPays = paidToday
     ? 0

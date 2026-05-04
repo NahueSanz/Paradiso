@@ -71,9 +71,6 @@ model User {
   memberships              Membership[]
   resetPasswordToken       String?
   resetPasswordExpires     DateTime?
-  isEmailVerified          Boolean      @default(false)
-  emailVerificationToken   String?
-  emailVerificationExpires DateTime?
   createdAt                DateTime     @default(now())
   updatedAt                DateTime     @updatedAt
 }

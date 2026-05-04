@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 // ── Icons ──────────────────────────────────────────────────────────────────────
@@ -67,88 +67,11 @@ const inputCls =
   'hover:bg-white/[0.10] hover:border-white/20 ' +
   'transition-all duration-200';
 
-// ── Post-registration "check your email" screen ────────────────────────────────
-
-function CheckEmailScreen({
-  email,
-  onResend,
-}: {
-  email: string;
-  onResend: (email: string) => Promise<void>;
-}) {
-  const [sending,    setSending]    = useState(false);
-  const [sent,       setSent]       = useState(false);
-  const [resendErr,  setResendErr]  = useState('');
-
-  async function handleResend() {
-    setSending(true);
-    setSent(false);
-    setResendErr('');
-    try {
-      await onResend(email);
-      setSent(true);
-    } catch (err: any) {
-      setResendErr(err.message ?? 'Error al reenviar. Intentá de nuevo.');
-    } finally {
-      setSending(false);
-    }
-  }
-
-  return (
-    <div className="min-h-screen flex items-center justify-center px-4 relative" style={courtBg}>
-      <div className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-lime-500/[0.04] rounded-full blur-3xl pointer-events-none" />
-      <div className="relative w-full max-w-md">
-        <div className="backdrop-blur-xl bg-white/[0.07] border border-white/[0.12] rounded-2xl shadow-2xl shadow-black/60 p-8 text-center">
-          <div className="w-16 h-16 bg-lime-500/10 rounded-full flex items-center justify-center mx-auto mb-5">
-            <svg className="w-8 h-8 text-lime-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-                d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-            </svg>
-          </div>
-
-          <h2 className="text-xl font-bold text-white mb-2">¡Revisá tu correo!</h2>
-          <p className="text-sm text-white/50 mb-1">Enviamos un enlace de verificación a</p>
-          <p className="text-sm font-semibold text-lime-400 mb-4">{email}</p>
-          <p className="text-xs text-white/30 mb-6">
-            El enlace expira en 24 horas. Si no lo ves, revisá la carpeta de spam.
-          </p>
-
-          {sent && (
-            <p className="text-xs text-lime-400 bg-lime-500/10 rounded-lg px-3 py-2 mb-4">
-              ¡Correo reenviado! Revisá tu casilla.
-            </p>
-          )}
-          {resendErr && (
-            <p className="text-xs text-red-400 bg-red-500/10 rounded-lg px-3 py-2 mb-4">
-              {resendErr}
-            </p>
-          )}
-
-          <div className="space-y-3">
-            <Link
-              to="/login"
-              className="block py-3 px-6 rounded-xl font-semibold text-sm text-white bg-gradient-to-r from-lime-500 to-lime-600 hover:from-lime-400 hover:to-lime-500 transition-all duration-200"
-            >
-              Ir al inicio de sesión
-            </Link>
-            <button
-              onClick={handleResend}
-              disabled={sending}
-              className="block w-full py-2.5 px-6 rounded-xl text-sm text-white/50 hover:text-white/80 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-            >
-              {sending ? 'Enviando…' : '¿No recibiste el correo? Reenviar'}
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 // ── Register ──────────────────────────────────────────────────────────────────
 
 export default function Register() {
-  const { register, resendVerification } = useAuth();
+  const { register } = useAuth();
+  const navigate = useNavigate();
 
   const [email,           setEmail]           = useState('');
   const [password,        setPassword]        = useState('');
@@ -157,7 +80,6 @@ export default function Register() {
   const [loading,         setLoading]         = useState(false);
   const [showPassword,    setShowPassword]    = useState(false);
   const [showConfirm,     setShowConfirm]     = useState(false);
-  const [registered,      setRegistered]      = useState(false);
 
   const passwordMismatch = confirmPassword !== '' && password !== confirmPassword;
   const isInvalid        = passwordMismatch || password.length < 6;
@@ -172,16 +94,12 @@ export default function Register() {
     setLoading(true);
     try {
       await register(email, password, 'owner');
-      setRegistered(true);
+      navigate('/login', { state: { successMessage: '¡Cuenta creada! Ya podés iniciar sesión.' } });
     } catch (err: any) {
       setError(err.message ?? 'Error al registrarse.');
     } finally {
       setLoading(false);
     }
-  }
-
-  if (registered) {
-    return <CheckEmailScreen email={email} onResend={resendVerification} />;
   }
 
   return (

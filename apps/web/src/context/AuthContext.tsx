@@ -13,8 +13,6 @@ interface AuthContextValue {
   login:                (email: string, password: string) => Promise<void>;
   register:             (email: string, password: string, role: 'owner' | 'employee') => Promise<void>;
   logout:               () => void;
-  resendVerification:   (email: string) => Promise<void>;
-  markEmailVerified:    () => void;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -57,7 +55,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   async function register(email: string, password: string, role: 'owner' | 'employee') {
-    // Backend no longer returns a token — user must verify email before accessing the app.
     await postJson('/auth/register', { email, password, role });
   }
 
@@ -68,21 +65,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUserState(null);
   }
 
-  async function resendVerification(email: string) {
-    if (!email?.trim()) return;
-    await postJson('/auth/resend-verification', { email });
-  }
-
-  function markEmailVerified() {
-    if (!user) return;
-    const updated: User = { ...user, isEmailVerified: true };
-    localStorage.setItem(USER_KEY, JSON.stringify(updated));
-    setUserState(updated);
-  }
-
   return (
     <AuthContext.Provider
-      value={{ user, token, setUser, login, register, logout, resendVerification, markEmailVerified }}
+      value={{ user, token, setUser, login, register, logout }}
     >
       {children}
     </AuthContext.Provider>
