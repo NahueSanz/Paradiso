@@ -1,14 +1,45 @@
 import nodemailer from 'nodemailer';
 
+const SMTP_HOST   = process.env.SMTP_HOST   ?? 'smtp.gmail.com';
+const SMTP_PORT   = Number(process.env.SMTP_PORT ?? 587);
+const SMTP_SECURE = process.env.SMTP_SECURE === 'true';
+
+console.log(`[EMAIL] Creating transporter — host:${SMTP_HOST} port:${SMTP_PORT} secure:${SMTP_SECURE}`);
+
 const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST,
-  port: Number(process.env.SMTP_PORT ?? 587),
-  secure: process.env.SMTP_SECURE === 'true',
+  host:   SMTP_HOST,
+  port:   SMTP_PORT,
+  secure: SMTP_SECURE,
   auth: {
     user: process.env.SMTP_USER,
     pass: process.env.SMTP_PASS,
   },
+  connectionTimeout: 10_000,
+  greetingTimeout:   10_000,
+  socketTimeout:     15_000,
 });
+
+// Called once at startup to verify SMTP reachability.
+export async function verifySmtp(): Promise<void> {
+  try {
+    await transporter.verify();
+    console.log('[EMAIL] SMTP READY');
+  } catch (err) {
+    console.error('[EMAIL] SMTP FAILED —', (err as Error).message);
+  }
+}
+
+// Wraps a promise with a hard timeout so SMTP hangs never block the request.
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error(`SMTP timeout after ${ms}ms [${label}]`)), ms),
+    ),
+  ]);
+}
+
+// ── HTML helpers ──────────────────────────────────────────────────────────────
 
 function emailHeader(appUrl: string): string {
   return `
@@ -42,6 +73,8 @@ function emailWrapper(appUrl: string, content: string): string {
   `;
 }
 
+// ── sendPasswordResetEmail ────────────────────────────────────────────────────
+
 export async function sendPasswordResetEmail(
   to: string,
   rawToken: string,
@@ -49,6 +82,9 @@ export async function sendPasswordResetEmail(
 ): Promise<void> {
   const appUrl   = process.env.FRONTEND_URL ?? 'http://localhost:5173';
   const resetUrl = `${appUrl}/reset-password?token=${rawToken}`;
+  const start    = Date.now();
+
+  console.log(`[EMAIL] sendPasswordResetEmail — to:${to} host:${SMTP_HOST}:${SMTP_PORT} secure:${SMTP_SECURE} ts:${new Date().toISOString()}`);
 
   const content = `
     <h2 style="color:#111;margin-top:0;font-size:18px">Recuperar contraseña</h2>
@@ -63,13 +99,26 @@ export async function sendPasswordResetEmail(
     <p style="color:#6b7280;font-size:12px">O copiá este enlace en tu navegador:<br/>${resetUrl}</p>
   `;
 
-  await transporter.sendMail({
-    from: `"Club Flow" <${process.env.SMTP_USER}>`,
-    to,
-    subject: 'Recuperar contraseña — Club Flow',
-    html: emailWrapper(appUrl, content),
-  });
+  try {
+    console.log(`[EMAIL] Calling sendMail (password-reset) → ${SMTP_HOST}:${SMTP_PORT}`);
+    await withTimeout(
+      transporter.sendMail({
+        from:    `"Club Flow" <${process.env.SMTP_USER}>`,
+        to,
+        subject: 'Recuperar contraseña — Club Flow',
+        html:    emailWrapper(appUrl, content),
+      }),
+      20_000,
+      'password-reset',
+    );
+    console.log(`[EMAIL] sendMail resolved (password-reset) in ${Date.now() - start}ms`);
+  } catch (err) {
+    console.error(`[EMAIL] sendMail FAILED (password-reset) after ${Date.now() - start}ms —`, (err as Error).message);
+    throw err;
+  }
 }
+
+// ── sendInvitationEmail ───────────────────────────────────────────────────────
 
 export async function sendInvitationEmail(params: {
   to: string;
@@ -80,6 +129,9 @@ export async function sendInvitationEmail(params: {
   const { to, token, clubName, inviterName } = params;
   const appUrl    = process.env.FRONTEND_URL ?? 'http://localhost:5173';
   const inviteUrl = `${appUrl}/invite?token=${token}`;
+  const start     = Date.now();
+
+  console.log(`[EMAIL] sendInvitationEmail — to:${to} club:${clubName} host:${SMTP_HOST}:${SMTP_PORT} secure:${SMTP_SECURE} ts:${new Date().toISOString()}`);
 
   const inviterLine = inviterName
     ? `<p><strong>${inviterName}</strong> te invitó a unirte al equipo de <strong>${clubName}</strong>.</p>`
@@ -97,11 +149,21 @@ export async function sendInvitationEmail(params: {
     <p style="color:#6b7280;font-size:11px">Si no esperabas esta invitación, podés ignorar este correo.</p>
   `;
 
-  await transporter.sendMail({
-    from: `"Club Flow" <${process.env.SMTP_USER}>`,
-    to,
-    subject: `Invitación para unirte a ${clubName} — Club Flow`,
-    replyTo: undefined,
-    html: emailWrapper(appUrl, content),
-  });
+  try {
+    console.log(`[EMAIL] Calling sendMail (invitation) → ${SMTP_HOST}:${SMTP_PORT}`);
+    await withTimeout(
+      transporter.sendMail({
+        from:    `"Club Flow" <${process.env.SMTP_USER}>`,
+        to,
+        subject: `Invitación para unirte a ${clubName} — Club Flow`,
+        html:    emailWrapper(appUrl, content),
+      }),
+      20_000,
+      'invitation',
+    );
+    console.log(`[EMAIL] sendMail resolved (invitation) in ${Date.now() - start}ms`);
+  } catch (err) {
+    console.error(`[EMAIL] sendMail FAILED (invitation) after ${Date.now() - start}ms —`, (err as Error).message);
+    throw err;
+  }
 }
