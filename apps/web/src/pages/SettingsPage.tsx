@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import * as api from '../api';
 import type { DaySchedule } from '../api';
 import { useClub } from '../context/ClubContext';
+import { useAuth } from '../context/AuthContext';
 
 const DAY_NAMES = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado'];
 const FALLBACK_OPEN  = '09:00';
@@ -17,7 +18,14 @@ function emptySchedule(): DaySchedule[] {
 
 export default function SettingsPage() {
   const { selectedClubId } = useClub();
+  const { user, setUser } = useAuth();
 
+  // ── Profile state ──
+  const [profileName,   setProfileName]   = useState(user?.name ?? '');
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [profileError,  setProfileError]  = useState('');
+
+  // ── Schedule state ──
   const [schedule, setSchedule] = useState<DaySchedule[]>(emptySchedule());
   const [loading,  setLoading]  = useState(false);
   const [saving,   setSaving]   = useState(false);
@@ -38,6 +46,25 @@ export default function SettingsPage() {
 
   function updateDay(idx: number, field: 'openTime' | 'closeTime', value: string) {
     setSchedule((prev) => prev.map((d, i) => i === idx ? { ...d, [field]: value } : d));
+  }
+
+  async function handleSaveProfile(e: React.FormEvent) {
+    e.preventDefault();
+    const trimmed = profileName.trim();
+    if (trimmed.length < 2) { setProfileError('El nombre debe tener al menos 2 caracteres'); return; }
+    if (trimmed.length > 50) { setProfileError('El nombre no puede superar los 50 caracteres'); return; }
+    setSavingProfile(true);
+    setProfileError('');
+    try {
+      const updated = await api.updateMyProfile({ name: trimmed });
+      setUser({ ...user!, name: updated.name });
+      setProfileName(updated.name);
+      showToast('Nombre actualizado correctamente', true);
+    } catch (err: any) {
+      setProfileError(err.message ?? 'Error al guardar el nombre');
+    } finally {
+      setSavingProfile(false);
+    }
   }
 
   async function handleSave() {
@@ -64,6 +91,43 @@ export default function SettingsPage() {
       <p className="text-sm text-muted-foreground mb-6">
         Ajustes del club
       </p>
+
+      {/* Profile section */}
+      <section className="bg-card rounded-xl border border-border overflow-hidden mb-6">
+        <div className="px-5 py-4 border-b border-border">
+          <h2 className="text-base font-semibold text-foreground">Mi perfil</h2>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Tu nombre visible en el chat y el equipo.
+          </p>
+        </div>
+
+        <form onSubmit={handleSaveProfile} className="px-5 py-4 flex flex-col gap-3 sm:flex-row sm:items-end">
+          <div className="flex-1">
+            <label className="block text-xs font-medium text-muted-foreground mb-1">Nombre</label>
+            <input
+              type="text"
+              value={profileName}
+              onChange={(e) => { setProfileName(e.target.value); setProfileError(''); }}
+              placeholder="Ej: Juan García"
+              maxLength={50}
+              className="w-full border border-input rounded-lg px-3 py-2 text-sm
+                         bg-background text-foreground
+                         focus:outline-none focus:ring-2 focus:ring-indigo-400"
+            />
+            {profileError && (
+              <p className="text-xs text-red-600 dark:text-red-400 mt-1">{profileError}</p>
+            )}
+          </div>
+          <button
+            type="submit"
+            disabled={savingProfile || !profileName.trim() || profileName.trim() === (user?.name ?? '')}
+            className="px-5 py-2 text-sm rounded-lg bg-indigo-600 text-white font-medium
+                       hover:bg-indigo-700 disabled:opacity-50 transition-colors shrink-0"
+          >
+            {savingProfile ? 'Guardando…' : 'Guardar nombre'}
+          </button>
+        </form>
+      </section>
 
       {/* Opening hours section */}
       <section className="bg-card rounded-xl border border-border overflow-hidden">

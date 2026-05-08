@@ -2,15 +2,14 @@ import { NextFunction, Request, Response } from 'express';
 import * as productService from '../services/productService';
 import prisma from '../lib/prisma';
 
-// ── GET /products?clubId=
+// ── GET /products
 export async function listProducts(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const clubId = Number(req.query.clubId);
-    if (!Number.isInteger(clubId) || clubId <= 0) {
-      res.status(400).json({ message: 'clubId must be a positive integer' });
+    if (!req.membership) {
+      res.status(403).json({ message: 'X-Club-Id header required' });
       return;
     }
-    const products = await productService.getProducts(clubId);
+    const products = await productService.getProducts(req.membership.clubId);
     res.json(products);
   } catch (err) {
     next(err);
@@ -39,13 +38,12 @@ export async function createProduct(req: Request, res: Response, next: NextFunct
       return;
     }
 
-    const membership = await prisma.membership.findFirst({ where: { userId: req.user.id } });
-    if (!membership) {
-      res.status(403).json({ message: 'User has no club membership' });
+    if (!req.membership) {
+      res.status(403).json({ message: 'X-Club-Id header required' });
       return;
     }
 
-    const product = await productService.createProduct({ name, salePrice, purchasePrice, stock, clubId: membership.clubId });
+    const product = await productService.createProduct({ name, salePrice, purchasePrice, stock, clubId: req.membership.clubId });
     res.status(201).json(product);
   } catch (err) {
     next(err);
@@ -55,8 +53,18 @@ export async function createProduct(req: Request, res: Response, next: NextFunct
 // ── PUT /products/:id
 export async function updateProduct(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
+    if (!req.membership) {
+      res.status(403).json({ message: 'X-Club-Id header required' });
+      return;
+    }
     const id = Number(req.params.id);
     const { name, salePrice, purchasePrice, stock } = req.body;
+
+    const existing = await prisma.product.findUnique({ where: { id } });
+    if (!existing || existing.clubId !== req.membership.clubId) {
+      res.status(404).json({ message: 'Producto no encontrado' });
+      return;
+    }
 
     const product = await productService.updateProduct(id, { name, salePrice, purchasePrice, stock });
     res.json(product);
@@ -68,7 +76,18 @@ export async function updateProduct(req: Request, res: Response, next: NextFunct
 // ── DELETE /products/:id
 export async function deleteProduct(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
+    if (!req.membership) {
+      res.status(403).json({ message: 'X-Club-Id header required' });
+      return;
+    }
     const id = Number(req.params.id);
+
+    const existing = await prisma.product.findUnique({ where: { id } });
+    if (!existing || existing.clubId !== req.membership.clubId) {
+      res.status(404).json({ message: 'Producto no encontrado' });
+      return;
+    }
+
     await productService.deleteProduct(id);
     res.status(204).end();
   } catch (err) {
@@ -94,13 +113,12 @@ export async function sellProduct(req: Request, res: Response, next: NextFunctio
       return;
     }
 
-    const membership = await prisma.membership.findFirst({ where: { userId: req.user.id } });
-    if (!membership) {
-      res.status(403).json({ message: 'User has no club membership' });
+    if (!req.membership) {
+      res.status(403).json({ message: 'X-Club-Id header required' });
       return;
     }
 
-    const updated = await productService.sellProduct(productId, quantity, paymentMethod, membership.clubId);
+    const updated = await productService.sellProduct(productId, quantity, paymentMethod, req.membership.clubId);
     res.json(updated);
   } catch (err: any) {
     if (err.status) {

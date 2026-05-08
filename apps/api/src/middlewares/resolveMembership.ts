@@ -1,6 +1,18 @@
 import { Request, Response, NextFunction } from 'express';
 import prisma from '../lib/prisma';
 
+export function requireOwnerMembership(req: Request, res: Response, next: NextFunction): void {
+  if (!req.membership) {
+    res.status(403).json({ message: 'X-Club-Id header required' });
+    return;
+  }
+  if (req.membership.role !== 'owner') {
+    res.status(403).json({ message: 'Se requiere rol de dueño para esta acción' });
+    return;
+  }
+  next();
+}
+
 /**
  * Optionally resolves the caller's Membership for a given club.
  * Reads the club id from the X-Club-Id request header.
@@ -19,15 +31,11 @@ export async function resolveMembership(req: Request, _res: Response, next: Next
     return;
   }
 
-  try {
-    const membership = await prisma.membership.findUnique({
-      where: { userId_clubId: { userId: req.user.id, clubId } },
-    });
-    if (membership) {
-      req.membership = membership;
-    }
-  } catch {
-    // Non-fatal: continue without membership context
+  const membership = await prisma.membership.findUnique({
+    where: { userId_clubId: { userId: req.user.id, clubId } },
+  });
+  if (membership) {
+    req.membership = membership;
   }
 
   next();

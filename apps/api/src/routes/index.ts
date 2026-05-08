@@ -13,6 +13,8 @@ import cashRoutes from "./cashRoutes";
 import productRoutes from "./productRoutes";
 import movementRoutes from "./movementRoutes";
 import openingHoursRoutes from "./openingHoursRoutes";
+import chatRoutes from "./chatRoutes";
+import userRoutes from "./userRoutes";
 import { authenticate } from "../middlewares/authenticate";
 import { acceptInvitation } from "../controllers/invitationController";
 
@@ -37,5 +39,7 @@ router.use("/cash", cashRoutes);
 router.use("/products", productRoutes);
 router.use("/movements", movementRoutes);
 router.use("/opening-hours", openingHoursRoutes);
+router.use("/chat", chatRoutes);
+router.use("/users", userRoutes);
 
 export default router;

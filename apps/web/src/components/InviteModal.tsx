@@ -13,8 +13,7 @@ export default function InviteModal({ onClose }: Props) {
   const [displayName, setDisplayName] = useState('');
   const [loading,     setLoading]     = useState(false);
   const [error,       setError]       = useState('');
-  const [inviteUrl,   setInviteUrl]   = useState<string | null>(null);
-  const [copied,      setCopied]      = useState(false);
+  const [sent,        setSent]        = useState(false);
 
   const inputRef = useRef<HTMLInputElement>(null);
   useEffect(() => { inputRef.current?.focus(); }, []);
@@ -29,21 +28,13 @@ export default function InviteModal({ onClose }: Props) {
     setError('');
     setLoading(true);
     try {
-      const result = await api.createInvitation(email.trim(), selectedClubId, displayName.trim());
-      const url = `${window.location.origin}/invite?token=${result.token}`;
-      setInviteUrl(url);
+      await api.createInvitation(email.trim(), selectedClubId, displayName.trim());
+      setSent(true);
     } catch (err: any) {
       setError(err.message ?? 'Error al crear la invitación.');
     } finally {
       setLoading(false);
     }
-  }
-
-  async function handleCopy() {
-    if (!inviteUrl) return;
-    await navigator.clipboard.writeText(inviteUrl);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
   }
 
   return (
@@ -63,7 +54,7 @@ export default function InviteModal({ onClose }: Props) {
           </button>
         </div>
 
-        {!inviteUrl ? (
+        {!sent ? (
           /* ── Step 1: form ── */
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
@@ -119,41 +110,25 @@ export default function InviteModal({ onClose }: Props) {
                 className="flex-1 px-4 py-2 text-sm rounded-lg bg-indigo-600 text-white
                            font-medium hover:bg-indigo-700 disabled:opacity-50 transition-colors"
               >
-                {loading ? 'Generando…' : 'Generar invitación'}
+                {loading ? 'Enviando…' : 'Generar invitación'}
               </button>
             </div>
           </form>
         ) : (
-          /* ── Step 2: show link ── */
+          /* ── Step 2: success ── */
           <div className="space-y-4">
-            <div className="flex items-center gap-2 text-emerald-600">
-              <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="flex items-start gap-3 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800 rounded-xl p-4">
+              <svg className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
               </svg>
-              <p className="text-sm font-medium">Invitación creada para <strong>{displayName}</strong></p>
-            </div>
-
-            <div>
-              <p className="text-sm font-medium text-foreground mb-2">Link de invitación</p>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  readOnly
-                  value={inviteUrl}
-                  className="flex-1 border border-border bg-muted rounded-lg px-3 py-2
-                             text-xs text-muted-foreground focus:outline-none select-all"
-                />
-                <button
-                  onClick={handleCopy}
-                  className="px-3 py-2 text-xs rounded-lg border border-border text-muted-foreground
-                             hover:bg-muted transition-colors whitespace-nowrap"
-                >
-                  {copied ? 'Copiado!' : 'Copiar'}
-                </button>
+              <div>
+                <p className="text-sm font-semibold text-emerald-700 dark:text-emerald-400">
+                  Invitación enviada correctamente
+                </p>
+                <p className="text-xs text-emerald-600 dark:text-emerald-500 mt-0.5">
+                  Le enviamos un correo a <strong>{email}</strong> con el link para crear su cuenta.
+                </p>
               </div>
-              <p className="text-xs text-muted-foreground mt-2">
-                Compartí este link con el empleado para que pueda crear su cuenta.
-              </p>
             </div>
 
             <button

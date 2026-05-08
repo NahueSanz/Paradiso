@@ -41,6 +41,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   function setUser(u: User | null) {
     setUserState(u);
+    if (u) {
+      localStorage.setItem(USER_KEY, JSON.stringify(u));
+    } else {
+      localStorage.removeItem(USER_KEY);
+    }
   }
 
   async function login(email: string, password: string) {

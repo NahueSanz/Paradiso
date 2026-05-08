@@ -69,6 +69,22 @@ export function getClubs(): Promise<Club[]> {
   return request('/clubs');
 }
 
+export interface ClubMember {
+  id: number;
+  name: string;
+  email: string;
+  displayName: string;
+  role: 'owner' | 'employee';
+}
+
+export function getClubMembers(): Promise<ClubMember[]> {
+  return request('/clubs/members', { headers: clubIdHeader() });
+}
+
+export function updateMyProfile(data: { name: string }): Promise<{ id: number; email: string; name: string; role: string }> {
+  return request('/users/me', { method: 'PATCH', body: JSON.stringify(data) });
+}
+
 export function createClub(name: string): Promise<Club> {
   return request('/clubs', { method: 'POST', body: JSON.stringify({ name }) });
 }
@@ -277,8 +293,7 @@ export function updateMembership(id: number, data: { displayName: string }): Pro
 
 export interface InvitationResponse {
   status: string;
-  token: string;
-  invitation: { token: string; [key: string]: unknown };
+  invitation: { [key: string]: unknown };
 }
 
 export function createInvitation(email: string, clubId: number, displayName: string): Promise<InvitationResponse> {
@@ -358,8 +373,8 @@ export interface SellProductPayload {
   paymentMethod: 'cash' | 'transfer' | 'card';
 }
 
-export function getProducts(clubId: number): Promise<Product[]> {
-  return request(`/products?clubId=${clubId}`);
+export function getProducts(_clubId: number): Promise<Product[]> {
+  return request('/products', { headers: clubIdHeader() });
 }
 
 export function createProduct(data: CreateProductPayload): Promise<Product> {
@@ -380,6 +395,29 @@ export function sellProduct(data: SellProductPayload): Promise<Product> {
 
 export function cashSellProduct(data: SellProductPayload): Promise<Product> {
   return request('/cash/sell', { method: 'POST', body: JSON.stringify(data), headers: clubIdHeader() });
+}
+
+// ── Chat ──────────────────────────────────────────────────────────────────────
+
+export interface ChatMessage {
+  id: number;
+  clubId: number;
+  senderId: number;
+  content: string;
+  createdAt: string;
+  sender: { id: number; name: string; email: string };
+}
+
+export function getChatMessages(): Promise<ChatMessage[]> {
+  return request('/chat/messages', { headers: clubIdHeader() });
+}
+
+export function sendChatMessage(content: string): Promise<ChatMessage> {
+  return request('/chat/messages', {
+    method: 'POST',
+    body: JSON.stringify({ content }),
+    headers: clubIdHeader(),
+  });
 }
 
 // ── Movements ─────────────────────────────────────────────────────────────────

@@ -7,12 +7,15 @@ import CashPage from './pages/CashPage';
 import StockPage from './pages/StockPage';
 import SellPage from './pages/SellPage';
 import SettingsPage from './pages/SettingsPage';
+import TeamPage from './pages/TeamPage';
+import ChatPage from './pages/ChatPage';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import InvitePage from './pages/InvitePage';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
 import AppLayout from './components/AppLayout';
+import NameSetupGuard from './components/NameSetupGuard';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { ClubProvider } from './context/ClubContext';
 import { MembershipProvider } from './context/MembershipContext';
@@ -50,6 +53,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
       <AuthProvider>
         <ClubProvider>
         <MembershipProvider>
+        <NameSetupGuard>
         <Routes>
           {/* Public routes */}
           <Route path="/login"           element={<GuestOnly><Login /></GuestOnly>} />
@@ -76,7 +80,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
             path="/sell"
             element={
               <RequireAuth>
-                <OwnerOnly><WithLayout><SellPage /></WithLayout></OwnerOnly>
+                <WithLayout><SellPage /></WithLayout>
               </RequireAuth>
             }
           />
@@ -84,7 +88,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
             path="/stock"
             element={
               <RequireAuth>
-                <OwnerOnly><WithLayout><StockPage /></WithLayout></OwnerOnly>
+                <WithLayout><StockPage /></WithLayout>
               </RequireAuth>
             }
           />
@@ -93,6 +97,22 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
             element={
               <RequireAuth>
                 <OwnerOnly><WithLayout><CashPage /></WithLayout></OwnerOnly>
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/chat"
+            element={
+              <RequireAuth>
+                <WithLayout><ChatPage /></WithLayout>
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/team"
+            element={
+              <RequireAuth>
+                <OwnerOnly><WithLayout><TeamPage /></WithLayout></OwnerOnly>
               </RequireAuth>
             }
           />
@@ -108,6 +128,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
           {/* Fallback */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+        </NameSetupGuard>
         </MembershipProvider>
         </ClubProvider>
       </AuthProvider>

@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { useClub } from '../context/ClubContext';
 import * as api from '../api';
 import type { Product } from '../api';
+import StockBadge from '../components/StockBadge';
+import { getStockStatus } from '../lib/stockStatus';
 
 function fmtMoney(n: number) {
   return new Intl.NumberFormat('es-AR', {
@@ -16,19 +18,16 @@ interface ProductRowProps {
 }
 
 function ProductRow({ product, qty, onQtyChange }: ProductRowProps) {
+  const isOut = getStockStatus(product.stock) === 'out';
+
   return (
     <div className={`flex flex-col sm:flex-row sm:items-center gap-3 px-5 py-4 border-b border-border last:border-0 ${
-      product.stock === 0 ? 'opacity-50' : ''
+      isOut ? 'opacity-50' : ''
     }`}>
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
           <span className="font-medium text-foreground text-sm">{product.name}</span>
-          {product.stock === 0 && (
-            <span className="text-xs font-semibold text-red-500 bg-red-50 dark:bg-red-900/20 px-1.5 py-0.5 rounded-full">Sin stock</span>
-          )}
-          {product.stock > 0 && product.stock < 5 && (
-            <span className="text-xs font-semibold text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 px-1.5 py-0.5 rounded-full">Stock bajo</span>
-          )}
+          <StockBadge stock={product.stock} />
         </div>
         <div className="flex items-center gap-3 mt-0.5">
           <span className="text-xs text-muted-foreground">{fmtMoney(product.salePrice)} c/u</span>
@@ -45,7 +44,7 @@ function ProductRow({ product, qty, onQtyChange }: ProductRowProps) {
       <div className="flex items-center gap-2 shrink-0">
         <button
           onClick={() => onQtyChange(product.id, Math.max(0, qty - 1))}
-          disabled={qty <= 0 || product.stock === 0}
+          disabled={qty <= 0 || isOut}
           className="w-7 h-7 flex items-center justify-center rounded-lg border border-input text-muted-foreground
                      hover:bg-muted transition-colors disabled:opacity-40 disabled:cursor-not-allowed text-sm font-bold"
         >
@@ -54,7 +53,7 @@ function ProductRow({ product, qty, onQtyChange }: ProductRowProps) {
         <span className="w-8 text-center text-sm font-semibold text-foreground">{qty}</span>
         <button
           onClick={() => onQtyChange(product.id, Math.min(product.stock, qty + 1))}
-          disabled={qty >= product.stock || product.stock === 0}
+          disabled={qty >= product.stock || isOut}
           className="w-7 h-7 flex items-center justify-center rounded-lg border border-input text-muted-foreground
                      hover:bg-muted transition-colors disabled:opacity-40 disabled:cursor-not-allowed text-sm font-bold"
         >

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import {
-  Menu, LogOut, BarChart2, Wallet, Package, ShoppingCart, Pencil, Calendar, Moon, Sun, Settings,
+  Menu, LogOut, BarChart2, Wallet, Package, ShoppingCart, Pencil, Calendar, Moon, Sun, Settings, Users, MessageSquare,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -35,8 +35,10 @@ const NAV_ITEMS: NavItem[] = [
   { to: '/',          label: 'Turnos',           Icon: Calendar,     ownerOnly: false, end: true },
   { to: '/dashboard', label: 'Ingresos',         Icon: BarChart2,    ownerOnly: true },
   { to: '/cash',      label: 'Caja',             Icon: Wallet,       ownerOnly: true },
-  { to: '/sell',      label: 'Vender productos', Icon: ShoppingCart, ownerOnly: true },
-  { to: '/stock',     label: 'Stock',            Icon: Package,      ownerOnly: true },
+  { to: '/sell',      label: 'Vender productos', Icon: ShoppingCart, ownerOnly: false },
+  { to: '/stock',     label: 'Stock',            Icon: Package,      ownerOnly: false },
+  { to: '/chat',      label: 'Chat',             Icon: MessageSquare, ownerOnly: false },
+  { to: '/team',      label: 'Mi equipo',        Icon: Users,        ownerOnly: true },
   { to: '/settings',  label: 'Configuración',    Icon: Settings,     ownerOnly: true },
 ];
 
@@ -65,7 +67,7 @@ export default function AppLayout({ children, onRenameClub, onShowProfile }: App
   const isOwner = user?.role === 'owner';
   const selectedClub = clubs.find((c) => c.id === selectedClubId);
   const clubName = selectedClub?.name ?? 'Sin club';
-  const displayName = currentMembership?.displayName ?? user?.name ?? '';
+  const displayName = currentMembership?.displayName ?? user?.name ?? user?.email ?? '';
   const roleLabel = isOwner ? 'Dueño' : 'Empleado';
 
   const visibleItems = NAV_ITEMS.filter((item) => !item.ownerOnly || isOwner);

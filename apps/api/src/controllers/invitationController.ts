@@ -3,6 +3,7 @@ import { randomUUID } from 'crypto';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import prisma from '../lib/prisma';
+import { sendInvitationEmail } from '../services/emailService';
 
 const JWT_SECRET = process.env.JWT_SECRET!;
 const JWT_EXPIRES_IN = '7d';
@@ -21,9 +22,9 @@ export async function createInvitation(req: Request, res: Response, next: NextFu
       return;
     }
 
-    // Club must belong to the authenticated owner
     const club = await prisma.club.findFirst({
       where: { id: Number(clubId), ownerId: req.user.id },
+      include: { owner: { select: { name: true } } },
     });
 
     if (!club) {
@@ -40,10 +41,23 @@ export async function createInvitation(req: Request, res: Response, next: NextFu
         token,
         displayName: displayName.trim(),
       },
-      select: { id: true, email: true, clubId: true, displayName: true, token: true, createdAt: true },
+      select: { id: true, email: true, clubId: true, displayName: true, createdAt: true },
     });
 
-    res.status(201).json({ status: 'success', token: invitation.token, invitation });
+    try {
+      await sendInvitationEmail({
+        to: email,
+        token,
+        clubName: club.name,
+        inviterName: club.owner?.name ?? undefined,
+      });
+    } catch {
+      await prisma.invitation.delete({ where: { id: invitation.id } });
+      res.status(502).json({ status: 'error', message: 'No se pudo enviar el correo de invitación. Intentá de nuevo.' });
+      return;
+    }
+
+    res.status(201).json({ status: 'success', invitation });
   } catch (err) {
     next(err);
   }
@@ -71,6 +85,7 @@ export async function inviteToClub(req: Request, res: Response, next: NextFuncti
 
     const club = await prisma.club.findFirst({
       where: { id: clubId, ownerId: req.user.id },
+      include: { owner: { select: { name: true } } },
     });
 
     if (!club) {
@@ -87,10 +102,23 @@ export async function inviteToClub(req: Request, res: Response, next: NextFuncti
         token,
         displayName: displayName.trim(),
       },
-      select: { id: true, email: true, clubId: true, displayName: true, token: true, createdAt: true },
+      select: { id: true, email: true, clubId: true, displayName: true, createdAt: true },
     });
 
-    res.status(201).json({ status: 'success', token: invitation.token, invitation });
+    try {
+      await sendInvitationEmail({
+        to: email,
+        token,
+        clubName: club.name,
+        inviterName: club.owner?.name ?? undefined,
+      });
+    } catch {
+      await prisma.invitation.delete({ where: { id: invitation.id } });
+      res.status(502).json({ status: 'error', message: 'No se pudo enviar el correo de invitación. Intentá de nuevo.' });
+      return;
+    }
+
+    res.status(201).json({ status: 'success', invitation });
   } catch (err) {
     next(err);
   }
