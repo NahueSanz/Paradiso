@@ -47,7 +47,7 @@ export async function sendPasswordResetEmail(
   rawToken: string,
   clubName?: string,
 ): Promise<void> {
-  const appUrl   = process.env.APP_URL ?? 'http://localhost:5173';
+  const appUrl   = process.env.FRONTEND_URL ?? 'http://localhost:5173';
   const resetUrl = `${appUrl}/reset-password?token=${rawToken}`;
 
   const content = `
@@ -78,7 +78,7 @@ export async function sendInvitationEmail(params: {
   inviterName?: string;
 }): Promise<void> {
   const { to, token, clubName, inviterName } = params;
-  const appUrl    = process.env.APP_URL ?? 'http://localhost:5173';
+  const appUrl    = process.env.FRONTEND_URL ?? 'http://localhost:5173';
   const inviteUrl = `${appUrl}/invite?token=${token}`;
 
   const inviterLine = inviterName
