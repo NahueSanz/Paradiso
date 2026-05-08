@@ -86,7 +86,7 @@ export async function sendInvitationEmail(params: {
     : `<p>Fuiste invitado/a a unirte al equipo de <strong>${clubName}</strong>.</p>`;
 
   const content = `
-    <h2 style="color:#111;margin-top:0;font-size:18px">Invitación a ${clubName}</h2>
+    <h2 style="color:#111;margin-top:0;font-size:18px">Invitación a unirte a ${clubName}</h2>
     ${inviterLine}
     <p>Hacé clic en el botón para crear tu cuenta. La invitación expira en <strong>7 días</strong>.</p>
     <a href="${inviteUrl}"
